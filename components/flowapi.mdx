@@ -1,0 +1,1051 @@
+---
+title: "FlowAPI (Admin Interface)"
+description: "Administrative dashboard and management interface for the Guru Network Framework"
+icon: "dashboard"
+---
+
+# FlowAPI (Admin Interface)
+
+FlowAPI is the administrative dashboard and management interface for the Guru Framework, providing monitoring, user management, and system administration capabilities.
+
+## Overview
+
+<CardGroup cols={2}>
+  <Card title="Admin Dashboard" icon="dashboard">
+    Web-based interface for system administration and monitoring
+  </Card>
+  <Card title="User Management" icon="users">
+    Manage users, roles, and permissions for the platform
+  </Card>
+  <Card title="Analytics & Reports" icon="chart-line">
+    Monitor system performance and generate usage reports
+  </Card>
+  <Card title="Configuration" icon="cog">
+    Configure system settings and workflow parameters
+  </Card>
+</CardGroup>
+
+## Architecture
+
+<div style={{minHeight: '600px', height: 'auto', margin: '20px 0', width: '100%', overflow: 'auto'}}>
+<Frame>
+```mermaid
+graph TB
+    subgraph "Client Layer"
+        FE[Frontend App]
+        MOB[Mobile App]
+        API[External APIs]
+    end
+
+    subgraph "FlowAPI Gateway"
+        MW[Middleware Stack]
+        AUTH[Authentication]
+        ROUTE[Request Router]
+        WS[WebSocket Manager]
+    end
+
+    subgraph "Backend Services"
+        ENG[Camunda Engine]
+        WORK[Workers]
+        WH[Warehouse]
+        MCP[MCP AI]
+    end
+
+    subgraph "Storage"
+        PG[(PostgreSQL)]
+        RD[(Redis)]
+    end
+
+    FE --> MW
+    MOB --> MW
+    API --> MW
+
+    MW --> AUTH
+    AUTH --> ROUTE
+    ROUTE --> WS
+
+    ROUTE --> ENG
+    ROUTE --> WORK
+    ROUTE --> WH
+    ROUTE --> MCP
+
+    AUTH --> PG
+    WS --> RD
+
+    style MW fill:#10B981
+    style AUTH fill:#F59E0B
+    style ROUTE fill:#3B82F6
+    style WS fill:#EF4444
+```
+</Frame>
+</div>
+
+## Core Features
+
+### 📊 Admin Dashboard Features
+
+<AccordionGroup>
+  <Accordion title="JWT Token Management">
+    ```python
+    from flask import Flask, render_template, request, jsonify
+    from flask_admin import Admin, BaseView, expose
+    from flask_sqlalchemy import SQLAlchemy
+    from datetime import datetime
+
+    app = Flask(__name__)
+    admin = Admin(app, name='FlowAPI Admin', template_mode='bootstrap3')
+
+    class AuthManager:
+        def __init__(self, secret_key: str, algorithm: str = "HS256"):
+            self.secret_key = secret_key
+            self.algorithm = algorithm
+
+        def create_access_token(self, user_id: str, role: str) -> str:
+            expire = datetime.utcnow() + timedelta(hours=24)
+            payload = {
+                "sub": user_id,
+                "role": role,
+                "exp": expire,
+                "iat": datetime.utcnow(),
+                "type": "access"
+            }
+            return jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
+
+        def create_refresh_token(self, user_id: str) -> str:
+            expire = datetime.utcnow() + timedelta(days=30)
+            payload = {
+                "sub": user_id,
+                "exp": expire,
+                "iat": datetime.utcnow(),
+                "type": "refresh"
+            }
+            return jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
+
+        def verify_token(self, token: str) -> dict:
+            try:
+                payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
+                return payload
+            except JWTError:
+                raise HTTPException(status_code=401, detail="Invalid token")
+
+    auth_manager = AuthManager(settings.JWT_SECRET)
+
+    async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+        """Extract and validate user from JWT token"""
+        token = credentials.credentials
+        payload = auth_manager.verify_token(token)
+
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        # Get user from database
+        user = await get_user_by_id(user_id)
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+
+        return user
+
+    def require_role(required_role: str):
+        """Decorator to require specific user role"""
+        def decorator(func):
+            async def wrapper(*args, **kwargs):
+                user = kwargs.get('current_user')
+                if not user or user.role != required_role:
+                    raise HTTPException(status_code=403, detail="Insufficient permissions")
+                return await func(*args, **kwargs)
+            return wrapper
+        return decorator
+    ```
+  </Accordion>
+
+  <Accordion title="Role-Based Access Control">
+    ```python
+    from enum import Enum
+    from typing import List, Set
+
+    class Permission(Enum):
+        # Workflow permissions
+        WORKFLOW_READ = "workflow:read"
+        WORKFLOW_CREATE = "workflow:create"
+        WORKFLOW_EXECUTE = "workflow:execute"
+        WORKFLOW_DELETE = "workflow:delete"
+
+        # User management
+        USER_READ = "user:read"
+        USER_CREATE = "user:create"
+        USER_UPDATE = "user:update"
+        USER_DELETE = "user:delete"
+
+        # System admin
+        SYSTEM_CONFIG = "system:config"
+        SYSTEM_MONITOR = "system:monitor"
+
+    class Role:
+        def __init__(self, name: str, permissions: Set[Permission]):
+            self.name = name
+            self.permissions = permissions
+
+    # Define role hierarchy
+    ROLES = {
+        "user": Role("user", {
+            Permission.WORKFLOW_READ,
+            Permission.WORKFLOW_EXECUTE
+        }),
+        "developer": Role("developer", {
+            Permission.WORKFLOW_READ,
+            Permission.WORKFLOW_CREATE,
+            Permission.WORKFLOW_EXECUTE,
+            Permission.USER_READ
+        }),
+        "admin": Role("admin", set(Permission))  # All permissions
+    }
+
+    class PermissionChecker:
+        @staticmethod
+        def has_permission(user_role: str, required_permission: Permission) -> bool:
+            role = ROLES.get(user_role)
+            return role and required_permission in role.permissions
+
+        @staticmethod
+        def require_permission(permission: Permission):
+            def decorator(func):
+                async def wrapper(*args, **kwargs):
+                    user = kwargs.get('current_user')
+                    if not user or not PermissionChecker.has_permission(user.role, permission):
+                        raise HTTPException(
+                            status_code=403,
+                            detail=f"Permission {permission.value} required"
+                        )
+                    return await func(*args, **kwargs)
+                return wrapper
+            return decorator
+
+    # Usage example
+    @app.post("/workflows")
+    @PermissionChecker.require_permission(Permission.WORKFLOW_CREATE)
+    async def create_workflow(
+        workflow_data: WorkflowCreate,
+        current_user: User = Depends(get_current_user)
+    ):
+        return await workflow_service.create(workflow_data, current_user)
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### 👥 User Management
+
+<AccordionGroup>
+  <Accordion title="Service Discovery">
+    ```python
+    from flask_admin.contrib.sqla import ModelView
+    from bot.database.models import User, TelegramUser
+    from sqlalchemy import func
+
+    class UserAdminView(ModelView):
+        column_list = ['id', 'telegram_id', 'first_name', 'username', 'created_at']
+        column_searchable_list = ['username', 'first_name']
+        column_filters = ['created_at', 'is_premium']
+
+        async def register_service(self, name: str, address: str, port: int):
+            """Register a service with Consul"""
+            self.consul.agent.service.register(
+                name=name,
+                service_id=f"{name}-{address}-{port}",
+                address=address,
+                port=port,
+                check=consul.Check.http(f"http://{address}:{port}/health", interval="10s")
+            )
+
+        async def discover_service(self, service_name: str) -> str:
+            """Discover healthy service instance"""
+            services = self.consul.health.service(service_name, passing=True)[1]
+
+            if not services:
+                raise HTTPException(status_code=503, detail=f"Service {service_name} unavailable")
+
+            # Simple round-robin load balancing
+            service = services[0]  # Use first healthy instance
+            return f"http://{service['Service']['Address']}:{service['Service']['Port']}"
+
+    service_registry = ServiceRegistry()
+
+    class ServiceRouter:
+        def __init__(self, registry: ServiceRegistry):
+            self.registry = registry
+            self.http_client = httpx.AsyncClient(timeout=30.0)
+
+        async def route_request(self, service_name: str, path: str, method: str, **kwargs):
+            """Route request to appropriate service"""
+            service_url = await self.registry.discover_service(service_name)
+            url = f"{service_url}{path}"
+
+            try:
+                response = await self.http_client.request(method, url, **kwargs)
+                return response
+            except httpx.RequestError as e:
+                raise HTTPException(status_code=503, detail=f"Service unavailable: {e}")
+
+    router = ServiceRouter(service_registry)
+
+    # Route handlers
+    @app.api_route("/api/workflows/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
+    async def proxy_to_engine(request: Request, path: str):
+        """Proxy workflow requests to Camunda Engine"""
+        return await router.route_request(
+            "engine",
+            f"/engine-rest/{path}",
+            request.method,
+            headers=dict(request.headers),
+            content=await request.body()
+        )
+
+    @app.api_route("/api/analytics/{path:path}", methods=["GET", "POST"])
+    async def proxy_to_warehouse(request: Request, path: str):
+        """Proxy analytics requests to Warehouse"""
+        return await router.route_request(
+            "warehouse",
+            f"/api/{path}",
+            request.method,
+            headers=dict(request.headers),
+            content=await request.body()
+        )
+    ```
+  </Accordion>
+
+  <Accordion title="Circuit Breaker Pattern">
+    ```python
+    import asyncio
+    from enum import Enum
+    from datetime import datetime, timedelta
+    from typing import Callable, Any
+
+    class CircuitState(Enum):
+        CLOSED = "closed"
+        OPEN = "open"
+        HALF_OPEN = "half_open"
+
+    class CircuitBreaker:
+        def __init__(
+            self,
+            failure_threshold: int = 5,
+            timeout: int = 60,
+            expected_exception: Exception = Exception
+        ):
+            self.failure_threshold = failure_threshold
+            self.timeout = timeout
+            self.expected_exception = expected_exception
+
+            self.failure_count = 0
+            self.last_failure_time = None
+            self.state = CircuitState.CLOSED
+
+        async def call(self, func: Callable, *args, **kwargs) -> Any:
+            """Execute function with circuit breaker protection"""
+
+            if self.state == CircuitState.OPEN:
+                if self._should_attempt_reset():
+                    self.state = CircuitState.HALF_OPEN
+                else:
+                    raise HTTPException(
+                        status_code=503,
+                        detail="Circuit breaker is OPEN"
+                    )
+
+            try:
+                result = await func(*args, **kwargs)
+
+                # Success - reset circuit breaker
+                if self.state == CircuitState.HALF_OPEN:
+                    self.state = CircuitState.CLOSED
+                    self.failure_count = 0
+
+                return result
+
+            except self.expected_exception as e:
+                self._record_failure()
+                raise e
+
+        def _record_failure(self):
+            """Record a failure and update circuit state"""
+            self.failure_count += 1
+            self.last_failure_time = datetime.utcnow()
+
+            if self.failure_count >= self.failure_threshold:
+                self.state = CircuitState.OPEN
+
+        def _should_attempt_reset(self) -> bool:
+            """Check if enough time has passed to attempt reset"""
+            return (
+                self.last_failure_time and
+                datetime.utcnow() - self.last_failure_time >= timedelta(seconds=self.timeout)
+            )
+
+    # Usage with service calls
+    engine_circuit = CircuitBreaker(failure_threshold=5, timeout=60)
+    warehouse_circuit = CircuitBreaker(failure_threshold=3, timeout=30)
+
+    async def call_engine_service(endpoint: str, **kwargs):
+        """Call Engine service with circuit breaker protection"""
+        async def _call():
+            return await router.route_request("engine", endpoint, **kwargs)
+
+        return await engine_circuit.call(_call)
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### 📈 Analytics & Monitoring
+
+<AccordionGroup>
+  <Accordion title="WebSocket Connection Manager">
+    ```python
+    from flask_admin import BaseView, expose
+    from sqlalchemy import func, desc
+    from datetime import datetime, timedelta
+
+    class AnalyticsView(BaseView):
+        @expose('/')
+        def index(self):
+            # Get user statistics
+            total_users = db.session.query(func.count(User.id)).scalar()
+            active_users = db.session.query(func.count(User.id)).filter(
+                User.last_activity > datetime.utcnow() - timedelta(days=7)
+            ).scalar()
+
+        async def connect(self, websocket: WebSocket, user_id: str):
+            """Accept WebSocket connection and register user"""
+            await websocket.accept()
+            self.active_connections[user_id] = websocket
+            self.user_subscriptions[user_id] = set()
+
+            # Subscribe to user's Redis channel
+            await self.redis.subscribe(f"user:{user_id}")
+
+            logger.info(f"WebSocket connected for user: {user_id}")
+
+        async def disconnect(self, user_id: str):
+            """Remove user connection"""
+            if user_id in self.active_connections:
+                del self.active_connections[user_id]
+
+            if user_id in self.user_subscriptions:
+                del self.user_subscriptions[user_id]
+
+            # Unsubscribe from Redis channel
+            await self.redis.unsubscribe(f"user:{user_id}")
+
+            logger.info(f"WebSocket disconnected for user: {user_id}")
+
+        async def subscribe(self, user_id: str, channel: str):
+            """Subscribe user to a specific channel"""
+            if user_id in self.user_subscriptions:
+                self.user_subscriptions[user_id].add(channel)
+                await self.redis.subscribe(f"channel:{channel}")
+
+        async def send_message(self, user_id: str, message: dict):
+            """Send message to specific user"""
+            if user_id in self.active_connections:
+                try:
+                    await self.active_connections[user_id].send_text(json.dumps(message))
+                except Exception as e:
+                    logger.error(f"Failed to send message to {user_id}: {e}")
+                    await self.disconnect(user_id)
+
+        async def broadcast_to_channel(self, channel: str, message: dict):
+            """Broadcast message to all users subscribed to channel"""
+            for user_id, subscriptions in self.user_subscriptions.items():
+                if channel in subscriptions:
+                    await self.send_message(user_id, message)
+
+        async def send_portfolio_update(self, user_id: str, portfolio_data: dict):
+            """Send portfolio update to user"""
+            message = {
+                "type": "portfolio_update",
+                "data": portfolio_data,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+            await self.send_message(user_id, message)
+
+        async def send_trade_notification(self, user_id: str, trade_data: dict):
+            """Send trade execution notification"""
+            message = {
+                "type": "trade_execution",
+                "data": trade_data,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+            await self.send_message(user_id, message)
+
+    websocket_manager = WebSocketManager()
+
+    @app.websocket("/ws/{user_id}")
+    async def websocket_endpoint(websocket: WebSocket, user_id: str):
+        await websocket_manager.connect(websocket, user_id)
+
+        try:
+            while True:
+                # Listen for client messages
+                data = await websocket.receive_text()
+                message = json.loads(data)
+
+                # Handle subscription requests
+                if message.get("type") == "subscribe":
+                    channel = message.get("channel")
+                    await websocket_manager.subscribe(user_id, channel)
+
+                # Handle ping/pong for connection health
+                elif message.get("type") == "ping":
+                    await websocket.send_text(json.dumps({"type": "pong"}))
+
+        except WebSocketDisconnect:
+            await websocket_manager.disconnect(user_id)
+        except Exception as e:
+            logger.error(f"WebSocket error for user {user_id}: {e}")
+            await websocket_manager.disconnect(user_id)
+    ```
+  </Accordion>
+
+  <Accordion title="Real-time Event Publishing">
+    ```python
+    import asyncio
+    from dataclasses import dataclass
+    from typing import Any, Dict
+
+    @dataclass
+    class Event:
+        type: str
+        user_id: str
+        data: Dict[str, Any]
+        channel: str = None
+
+    class EventPublisher:
+        def __init__(self, websocket_manager: WebSocketManager):
+            self.websocket_manager = websocket_manager
+            self.redis = redis.from_url(settings.REDIS_URL)
+
+        async def publish_user_event(self, event: Event):
+            """Publish event to specific user"""
+            # Send via WebSocket if user is connected
+            await self.websocket_manager.send_message(event.user_id, {
+                "type": event.type,
+                "data": event.data
+            })
+
+            # Also store in Redis for offline users
+            await self.redis.lpush(
+                f"events:{event.user_id}",
+                json.dumps({
+                    "type": event.type,
+                    "data": event.data,
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+            )
+
+        async def publish_channel_event(self, event: Event):
+            """Publish event to channel subscribers"""
+            await self.websocket_manager.broadcast_to_channel(event.channel, {
+                "type": event.type,
+                "data": event.data
+            })
+
+            # Store in Redis channel
+            await self.redis.publish(
+                f"channel:{event.channel}",
+                json.dumps({
+                    "type": event.type,
+                    "data": event.data,
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+            )
+
+    event_publisher = EventPublisher(websocket_manager)
+
+    # Event handlers for various system events
+    async def on_workflow_completed(workflow_instance_id: str, user_id: str, result: dict):
+        """Handle workflow completion event"""
+        event = Event(
+            type="workflow_completed",
+            user_id=user_id,
+            data={
+                "workflow_instance_id": workflow_instance_id,
+                "result": result,
+                "completed_at": datetime.utcnow().isoformat()
+            }
+        )
+        await event_publisher.publish_user_event(event)
+
+    async def on_trade_executed(user_id: str, trade_data: dict):
+        """Handle trade execution event"""
+        event = Event(
+            type="trade_executed",
+            user_id=user_id,
+            data=trade_data
+        )
+        await event_publisher.publish_user_event(event)
+
+        # Also broadcast to trading channel
+        channel_event = Event(
+            type="trade_executed",
+            user_id=user_id,
+            channel="trading",
+            data={
+                "symbol": trade_data.get("symbol"),
+                "side": trade_data.get("side"),
+                "amount": trade_data.get("amount")
+            }
+        )
+        await event_publisher.publish_channel_event(channel_event)
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Admin Interface Components
+
+### 🖥️ Dashboard Views
+
+<Tabs>
+  <Tab title="Main Dashboard">
+    ```python
+    from flask_admin import AdminIndexView, expose
+    from sqlalchemy import func
+    from datetime import datetime, timedelta
+
+    class AdminIndexView(AdminIndexView):
+        @expose('/')
+        def index(self):
+            # System overview statistics
+            stats = {
+                'total_users': db.session.query(func.count(User.id)).scalar(),
+                'active_workflows': get_active_workflow_count(),
+                'completed_tasks': get_completed_tasks_today(),
+                'system_uptime': get_system_uptime()
+            }
+            return self.render('admin/dashboard.html', stats=stats)
+
+    # Trusted Host Middleware
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=settings.ALLOWED_HOSTS
+    )
+
+    class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next):
+            response = await call_next(request)
+
+            # Security headers
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            response.headers["X-Frame-Options"] = "DENY"
+            response.headers["X-XSS-Protection"] = "1; mode=block"
+            response.headers["Strict-Transport-Security"] = "max-age=31536000"
+            response.headers["Content-Security-Policy"] = "default-src 'self'"
+            response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+            return response
+
+    app.add_middleware(SecurityHeadersMiddleware)
+    ```
+  </Tab>
+  <Tab title="Rate Limiting">
+    ```python
+    import time
+    from collections import defaultdict
+    from fastapi import HTTPException
+
+    class RateLimitMiddleware(BaseHTTPMiddleware):
+        def __init__(self, app, calls: int = 100, period: int = 60):
+            super().__init__(app)
+            self.calls = calls
+            self.period = period
+            self.clients = defaultdict(list)
+
+        async def dispatch(self, request: Request, call_next):
+            client_ip = request.client.host
+            now = time.time()
+
+            # Clean old requests
+            self.clients[client_ip] = [
+                req_time for req_time in self.clients[client_ip]
+                if now - req_time < self.period
+            ]
+
+            # Check rate limit
+            if len(self.clients[client_ip]) >= self.calls:
+                raise HTTPException(
+                    status_code=429,
+                    detail="Rate limit exceeded",
+                    headers={"Retry-After": str(self.period)}
+                )
+
+            # Record this request
+            self.clients[client_ip].append(now)
+
+            response = await call_next(request)
+            return response
+
+    app.add_middleware(RateLimitMiddleware, calls=100, period=60)
+    ```
+  </Tab>
+  <Tab title="Logging Middleware">
+    ```python
+    import structlog
+    import time
+    import uuid
+
+    logger = structlog.get_logger()
+
+    class LoggingMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next):
+            # Generate request ID
+            request_id = str(uuid.uuid4())
+            request.state.request_id = request_id
+
+            start_time = time.time()
+
+            # Log request
+            logger.info(
+                "Request started",
+                request_id=request_id,
+                method=request.method,
+                url=str(request.url),
+                client_ip=request.client.host,
+                user_agent=request.headers.get("user-agent")
+            )
+
+            try:
+                response = await call_next(request)
+
+                # Log response
+                process_time = time.time() - start_time
+                logger.info(
+                    "Request completed",
+                    request_id=request_id,
+                    status_code=response.status_code,
+                    process_time=process_time
+                )
+
+                response.headers["X-Request-ID"] = request_id
+                return response
+
+            except Exception as e:
+                process_time = time.time() - start_time
+                logger.error(
+                    "Request failed",
+                    request_id=request_id,
+                    error=str(e),
+                    process_time=process_time
+                )
+                raise
+
+    app.add_middleware(LoggingMiddleware)
+    ```
+  </Tab>
+</Tabs>
+
+## Admin Features
+
+### ⚙️ System Configuration
+
+<AccordionGroup>
+  <Accordion title="Authentication Endpoints">
+    ```python
+    from flask_admin import BaseView, expose
+    from flask import request, flash, redirect, url_for
+    import json
+
+    class ConfigView(BaseView):
+        @expose('/')
+        def index(self):
+            config = load_system_config()
+            return self.render('admin/config.html', config=config)
+
+        @expose('/save', methods=['POST'])
+        def save_config(self):
+            config_data = request.get_json()
+            save_system_config(config_data)
+            flash('Configuration saved successfully!', 'success')
+            return jsonify({'status': 'success'})
+
+    class LoginResponse(BaseModel):
+        access_token: str
+        refresh_token: str
+        token_type: str = "Bearer"
+        expires_in: int
+        user: dict
+
+    @auth_router.post("/login", response_model=LoginResponse)
+    async def login(credentials: LoginRequest):
+        """Authenticate user and return tokens"""
+        user = await authenticate_user(credentials.email, credentials.password)
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+
+        access_token = auth_manager.create_access_token(user.id, user.role)
+        refresh_token = auth_manager.create_refresh_token(user.id)
+
+        return LoginResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            expires_in=86400,  # 24 hours
+            user={
+                "id": user.id,
+                "email": user.email,
+                "role": user.role,
+                "username": user.username
+            }
+        )
+
+    @auth_router.post("/refresh")
+    async def refresh_token(refresh_token: str):
+        """Refresh access token"""
+        payload = auth_manager.verify_token(refresh_token)
+
+        if payload.get("type") != "refresh":
+            raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+        user_id = payload.get("sub")
+        user = await get_user_by_id(user_id)
+
+        new_access_token = auth_manager.create_access_token(user.id, user.role)
+
+        return {
+            "access_token": new_access_token,
+            "token_type": "Bearer",
+            "expires_in": 86400
+        }
+
+    @auth_router.post("/logout")
+    async def logout(current_user: User = Depends(get_current_user)):
+        """Logout user and invalidate tokens"""
+        # Add token to blacklist
+        await blacklist_user_tokens(current_user.id)
+
+        return {"message": "Successfully logged out"}
+    ```
+  </Accordion>
+
+  <Accordion title="Workflow Management">
+    ```python
+    workflow_router = APIRouter(prefix="/workflows", tags=["workflows"])
+
+    @workflow_router.get("/")
+    async def list_workflows(current_user: User = Depends(get_current_user)):
+        """List user's accessible workflows"""
+        response = await call_engine_service(
+            "/process-definition",
+            method="GET",
+            headers={"Authorization": f"Bearer {current_user.id}"}
+        )
+        return response.json()
+
+    @workflow_router.post("/{process_key}/start")
+    async def start_workflow(
+        process_key: str,
+        variables: dict,
+        current_user: User = Depends(get_current_user)
+    ):
+        """Start a new workflow instance"""
+        payload = {
+            "variables": {
+                key: {"value": value, "type": "String"}
+                for key, value in variables.items()
+            }
+        }
+
+        response = await call_engine_service(
+            f"/process-definition/key/{process_key}/start",
+            method="POST",
+            json=payload,
+            headers={"Authorization": f"Bearer {current_user.id}"}
+        )
+
+        instance_data = response.json()
+
+        # Notify user via WebSocket
+        await websocket_manager.send_message(current_user.id, {
+            "type": "workflow_started",
+            "data": {
+                "process_key": process_key,
+                "instance_id": instance_data["id"]
+            }
+        })
+
+        return instance_data
+
+    @workflow_router.get("/instances/{instance_id}")
+    async def get_workflow_instance(
+        instance_id: str,
+        current_user: User = Depends(get_current_user)
+    ):
+        """Get workflow instance details"""
+        response = await call_engine_service(
+            f"/process-instance/{instance_id}",
+            method="GET",
+            headers={"Authorization": f"Bearer {current_user.id}"}
+        )
+        return response.json()
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Configuration
+
+### ⚙️ Environment Settings
+
+```python
+import os
+from dataclasses import dataclass
+from typing import Optional
+
+@dataclass
+class AdminConfig:
+    # Flask Configuration
+    secret_key: str = os.getenv('SECRET_KEY', 'dev-secret-key')
+    debug: bool = os.getenv('DEBUG', 'False').lower() == 'true'
+
+    # Database
+    database_url: str = os.getenv('DATABASE_URL', 'postgresql://user:pass@localhost/db')
+
+    # Admin Authentication
+    admin_username: str = os.getenv('ADMIN_USERNAME', 'admin')
+    admin_password: str = os.getenv('ADMIN_PASSWORD', 'admin')
+
+    # Security
+    session_timeout: int = int(os.getenv('SESSION_TIMEOUT', '3600'))  # 1 hour
+    csrf_enabled: bool = os.getenv('CSRF_ENABLED', 'True').lower() == 'true'
+
+    # CORS
+    cors_origins: List[str] = ["http://localhost:3000"]
+    allowed_hosts: List[str] = ["localhost", "127.0.0.1"]
+
+    # External Services
+    engine_url: str = "http://localhost:8080"
+    warehouse_url: str = "http://localhost:8001"
+
+    # Rate Limiting
+    rate_limit_requests: int = 100
+    rate_limit_window: int = 60
+
+    # WebSocket
+    websocket_ping_interval: int = 30
+    websocket_ping_timeout: int = 10
+
+    @validator("cors_origins", pre=True)
+    def parse_cors_origins(cls, v):
+        if isinstance(v, str):
+            return [i.strip() for i in v.split(",")]
+        return v
+
+    class Config:
+        env_file = ".env"
+
+settings = Settings()
+```
+
+## Deployment & Monitoring
+
+### 🚀 Docker Deployment
+
+```python
+# docker-compose.yml for FlowAPI admin interface
+version: "3"
+
+services:
+  admin:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: flowapi-admin
+    env_file:
+      - .env
+    ports:
+      - "${ADMIN_PORT}:${ADMIN_PORT}"
+    command: ["python", "./flow_api/__main__.py"]
+    depends_on:
+      - postgres
+      - redis
+
+  postgres:
+    image: postgres:14-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+    async def check_redis(self) -> Dict[str, Any]:
+        """Check Redis connection"""
+        try:
+            redis_client = redis.from_url(settings.redis_url)
+            await redis_client.ping()
+            return {"status": "healthy", "response_time": "< 5ms"}
+        except Exception as e:
+            return {"status": "unhealthy", "error": str(e)}
+
+    async def check_external_services(self) -> Dict[str, Any]:
+        """Check external service connectivity"""
+        services = {}
+
+        # Check Engine
+        try:
+            response = await httpx.get(f"{settings.engine_url}/engine-rest/engine")
+            services["engine"] = {
+                "status": "healthy" if response.status_code == 200 else "unhealthy",
+                "response_time": f"{response.elapsed.total_seconds() * 1000:.2f}ms"
+            }
+        except Exception as e:
+            services["engine"] = {"status": "unhealthy", "error": str(e)}
+
+        # Check Warehouse
+        try:
+            response = await httpx.get(f"{settings.warehouse_url}/health")
+            services["warehouse"] = {
+                "status": "healthy" if response.status_code == 200 else "unhealthy",
+                "response_time": f"{response.elapsed.total_seconds() * 1000:.2f}ms"
+            }
+        except Exception as e:
+            services["warehouse"] = {"status": "unhealthy", "error": str(e)}
+
+        return services
+
+health_checker = HealthChecker()
+
+@app.get("/health")
+async def health_check():
+    """Comprehensive health check endpoint"""
+    checks = {
+        "database": await health_checker.check_database(),
+        "redis": await health_checker.check_redis(),
+        "external_services": await health_checker.check_external_services()
+    }
+
+    overall_healthy = all(
+        check.get("status") == "healthy"
+        for check in checks.values()
+        if isinstance(check, dict)
+    )
+
+    if not overall_healthy:
+        return Response(
+            content=json.dumps({"status": "unhealthy", "checks": checks}),
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            media_type="application/json"
+        )
+
+    return {"status": "healthy", "checks": checks}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Engine Component" icon="cogs" href="../components/engine">
+    Learn about the Camunda BPMN workflow engine
+  </Card>
+  <Card title="Workers Component" icon="code" href="../components/workers">
+    Understand how Python workers process automation tasks
+  </Card>
+</CardGroup>
+
+<Note>
+  FlowAPI admin interface runs separately from the main application. Deploy it alongside your main services for complete system management capabilities.
+</Note>

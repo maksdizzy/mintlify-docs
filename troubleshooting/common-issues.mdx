@@ -1,0 +1,1670 @@
+---
+title: "Common Issues"
+description: "Troubleshooting guide for common problems in the Guru Network Framework"
+icon: "wrench"
+---
+
+# Common Issues
+
+Comprehensive troubleshooting guide to help you diagnose and resolve common problems in the Guru Network Framework.
+
+## Quick Diagnostics
+
+<div style={{minHeight: '600px', height: 'auto', margin: '20px 0', width: '100%', overflow: 'auto'}}>
+<Frame>
+```mermaid
+graph TD
+    A[Issue Reported] --> B{Service Type?}
+
+    B -->|Frontend| C[Check Browser Console]
+    B -->|API| D[Check API Logs]
+    B -->|Database| E[Check DB Connection]
+    B -->|Workers| F[Check Worker Status]
+    B -->|Engine| G[Check Camunda Status]
+
+    C --> H[Network Issues?]
+    D --> I[Authentication Issues?]
+    E --> J[Connection Pool?]
+    F --> K[Task Processing?]
+    G --> L[Process Deployment?]
+
+    H --> M[Fix Network/CORS]
+    I --> N[Check JWT/Tokens]
+    J --> O[Restart DB Service]
+    K --> P[Restart Workers]
+    L --> Q[Redeploy Processes]
+
+    style A fill:#F59E0B
+    style M fill:#10B981
+    style N fill:#10B981
+    style O fill:#10B981
+    style P fill:#10B981
+    style Q fill:#10B981
+```
+</Frame>
+</div>
+
+## Service-Specific Issues
+
+### 🎨 Frontend Issues
+
+<AccordionGroup>
+  <Accordion title="Application Won't Load">
+    **Symptoms**: White screen, loading indefinitely, or JavaScript errors
+
+    **Diagnosis**:
+    ```bash
+    # Check if frontend service is running
+    curl http://localhost:3000
+
+    # Check browser console for errors
+    # Press F12 → Console tab
+
+    # Check network requests
+    # Press F12 → Network tab → Reload page
+    ```
+
+    **Common Causes & Solutions**:
+
+    1. **Build Issues**
+       ```bash
+       # Clear Next.js cache
+       cd frontend
+       rm -rf .next
+       pnpm install
+       pnpm build
+
+       # Check for TypeScript errors
+       pnpm type-check
+       ```
+
+    2. **Environment Variables Missing**
+       ```bash
+       # Verify environment variables
+       cat frontend/.env.local
+
+       # Required variables:
+       NEXT_PUBLIC_API_URL=http://localhost:8000
+       NEXT_PUBLIC_WS_URL=ws://localhost:8000/ws
+       NEXTAUTH_SECRET=your-secret-here
+       ```
+
+    3. **API Connection Issues**
+       ```bash
+       # Test API connectivity
+       curl http://localhost:8000/health
+
+       # Check CORS configuration
+       curl -H "Origin: http://localhost:3000" \
+            -H "Access-Control-Request-Method: GET" \
+            -H "Access-Control-Request-Headers: X-Requested-With" \
+            -X OPTIONS \
+            http://localhost:8000/api/workflows
+       ```
+  </Accordion>
+
+  <Accordion title="Authentication Not Working">
+    **Symptoms**: Login fails, redirects to login repeatedly, session expires immediately
+
+    **Diagnosis**:
+    ```javascript
+    // Check localStorage/sessionStorage in browser
+    localStorage.getItem('access_token')
+    sessionStorage.getItem('user_session')
+
+    // Check cookies
+    document.cookie
+
+    // Check network tab for auth requests
+    ```
+
+    **Solutions**:
+
+    1. **JWT Token Issues**
+       ```bash
+       # Verify JWT secret matches between frontend and API
+       # Frontend: NEXTAUTH_SECRET
+       # API: JWT_SECRET_KEY
+
+       # Clear browser storage
+       localStorage.clear()
+       sessionStorage.clear()
+       # Clear cookies for the domain
+       ```
+
+    2. **CORS Issues**
+       ```python
+       # Check API CORS configuration
+       allow_origins=[
+           "http://localhost:3000",  # Must match exactly
+           "https://app.guru-network.io"
+       ]
+       allow_credentials=True  # Required for auth cookies
+       ```
+
+    3. **Cookie Settings**
+       ```javascript
+       // Check cookie settings in browser
+       // Secure cookies require HTTPS
+       // SameSite=Strict may block cross-origin requests
+       ```
+  </Accordion>
+
+  <Accordion title="Real-time Updates Not Working">
+    **Symptoms**: WebSocket connections fail, real-time data not updating
+
+    **Diagnosis**:
+    ```javascript
+    // Check WebSocket connection in console
+    const ws = new WebSocket('ws://localhost:8000/ws');
+    ws.onopen = () => console.log('WebSocket connected');
+    ws.onerror = (error) => console.error('WebSocket error:', error);
+    ```
+
+    **Solutions**:
+    ```bash
+    # Check WebSocket endpoint
+    curl --include \
+         --no-buffer \
+         --header "Connection: Upgrade" \
+         --header "Upgrade: websocket" \
+         --header "Sec-WebSocket-Key: SGVsbG8sIHdvcmxkIQ==" \
+         --header "Sec-WebSocket-Version: 13" \
+         http://localhost:8000/ws
+
+    # Check proxy configuration (if using nginx)
+    # proxy_set_header Upgrade $http_upgrade;
+    # proxy_set_header Connection "upgrade";
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### 🌐 API Issues
+
+<AccordionGroup>
+  <Accordion title="API Service Won't Start">
+    **Symptoms**: Connection refused, service unavailable
+
+    **Diagnosis**:
+    ```bash
+    # Check if port is in use
+    lsof -i :8000
+
+    # Check service logs
+    docker logs guru-flowapi
+    # OR
+    tail -f logs/flowapi.log
+
+    # Check dependencies
+    curl http://localhost:5432  # PostgreSQL
+    curl http://localhost:6379  # Redis
+    ```
+
+    **Solutions**:
+
+    1. **Port Conflicts**
+       ```bash
+       # Kill process using port
+       sudo kill -9 $(lsof -t -i:8000)
+
+       # Or use different port
+       export FLOWAPI_PORT=8001
+       uvicorn main:app --port 8001
+       ```
+
+    2. **Database Connection Issues**
+       ```bash
+       # Test database connection
+       psql postgresql://guru:password@localhost:5432/guru_db
+
+       # Check connection pool
+       # Too many connections error
+       # Increase max_connections in postgresql.conf
+       ```
+
+    3. **Python Dependencies**
+       ```bash
+       # Reinstall dependencies
+       cd flowapi
+       poetry install --no-dev
+
+       # Check for import errors
+       python -c "import fastapi; print('FastAPI OK')"
+       python -c "import sqlalchemy; print('SQLAlchemy OK')"
+       ```
+  </Accordion>
+
+  <Accordion title="Slow API Response Times">
+    **Symptoms**: High response times, timeouts, poor performance
+
+    **Diagnosis**:
+    ```bash
+    # Test endpoint performance
+    curl -w "@curl-format.txt" -o /dev/null -s "http://localhost:8000/api/workflows"
+
+    # curl-format.txt:
+    #   time_namelookup:  %{time_namelookup}\n
+    #   time_connect:     %{time_connect}\n
+    #   time_appconnect:  %{time_appconnect}\n
+    #   time_pretransfer: %{time_pretransfer}\n
+    #   time_redirect:    %{time_redirect}\n
+    #   time_starttransfer: %{time_starttransfer}\n
+    #   time_total:       %{time_total}\n
+
+    # Check database query performance
+    # Enable slow query logging in PostgreSQL
+    ```
+
+    **Solutions**:
+
+    1. **Database Optimization**
+       ```sql
+       -- Identify slow queries
+       SELECT query, mean_time, calls
+       FROM pg_stat_statements
+       ORDER BY mean_time DESC LIMIT 10;
+
+       -- Add missing indexes
+       CREATE INDEX CONCURRENTLY idx_workflows_user_id ON workflows(user_id);
+       CREATE INDEX CONCURRENTLY idx_workflows_created_at ON workflows(created_at);
+
+       -- Analyze table statistics
+       ANALYZE workflows;
+       ```
+
+    2. **Connection Pool Tuning**
+       ```python
+       # Increase connection pool size
+       engine = create_async_engine(
+           DATABASE_URL,
+           pool_size=20,        # Increase from default 5
+           max_overflow=30,     # Increase overflow
+           pool_pre_ping=True,  # Verify connections
+           pool_recycle=3600    # Recycle connections
+       )
+       ```
+
+    3. **Add Caching**
+       ```python
+       # Add Redis caching for frequently accessed data
+       @app.get("/api/workflows")
+       async def get_workflows(user_id: str):
+           cache_key = f"workflows:{user_id}"
+           cached = await redis.get(cache_key)
+
+           if cached:
+               return json.loads(cached)
+
+           workflows = await get_user_workflows(user_id)
+           await redis.setex(cache_key, 300, json.dumps(workflows))
+           return workflows
+       ```
+  </Accordion>
+
+  <Accordion title="Memory Leaks">
+    **Symptoms**: Increasing memory usage, eventual OOM errors
+
+    **Diagnosis**:
+    ```bash
+    # Monitor memory usage
+    docker stats guru-flowapi
+
+    # Use memory profiler
+    pip install memory-profiler
+    python -m memory_profiler main.py
+
+    # Check for database connection leaks
+    # Monitor PostgreSQL connections
+    SELECT * FROM pg_stat_activity WHERE datname = 'guru_db';
+    ```
+
+    **Solutions**:
+    ```python
+    # Fix database session management
+    @app.middleware("http")
+    async def db_session_middleware(request: Request, call_next):
+        async with get_db_session() as session:
+            request.state.db = session
+            try:
+                response = await call_next(request)
+                await session.commit()
+                return response
+            except Exception:
+                await session.rollback()
+                raise
+            finally:
+                await session.close()  # Ensure cleanup
+
+    # Fix circular references
+    import gc
+    gc.collect()  # Force garbage collection
+
+    # Use weak references where appropriate
+    import weakref
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### 🗄️ Database Issues
+
+<AccordionGroup>
+  <Accordion title="Connection Pool Exhausted">
+    **Symptoms**: "too many connections" error, connection timeouts
+
+    **Diagnosis**:
+    ```sql
+    -- Check current connections
+    SELECT count(*) FROM pg_stat_activity;
+
+    -- Check connection details
+    SELECT pid, usename, application_name, client_addr, state
+    FROM pg_stat_activity
+    WHERE state = 'active';
+
+    -- Check max connections
+    SHOW max_connections;
+    ```
+
+    **Solutions**:
+    ```bash
+    # Increase PostgreSQL max_connections
+    echo "max_connections = 200" >> /etc/postgresql/15/main/postgresql.conf
+    systemctl restart postgresql
+
+    # Optimize application connection pooling
+    # Use connection poolers like PgBouncer
+    docker run -d --name pgbouncer \
+      -e DATABASES_HOST=postgres \
+      -e DATABASES_PORT=5432 \
+      -e DATABASES_USER=guru \
+      -e DATABASES_PASSWORD=password \
+      -e DATABASES_DBNAME=guru_db \
+      -e POOL_MODE=transaction \
+      -e MAX_CLIENT_CONN=100 \
+      -e DEFAULT_POOL_SIZE=20 \
+      pgbouncer/pgbouncer:latest
+    ```
+  </Accordion>
+
+  <Accordion title="Slow Queries">
+    **Symptoms**: High database CPU, slow response times, query timeouts
+
+    **Diagnosis**:
+    ```sql
+    -- Enable slow query logging
+    ALTER SYSTEM SET log_min_duration_statement = 1000; -- 1 second
+    SELECT pg_reload_conf();
+
+    -- Install pg_stat_statements
+    CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+
+    -- Find slow queries
+    SELECT query, calls, mean_time, total_time
+    FROM pg_stat_statements
+    ORDER BY mean_time DESC
+    LIMIT 10;
+    ```
+
+    **Solutions**:
+    ```sql
+    -- Add missing indexes
+    -- Before adding, check existing indexes
+    SELECT * FROM pg_indexes WHERE tablename = 'workflows';
+
+    -- Add compound indexes for common queries
+    CREATE INDEX CONCURRENTLY idx_workflows_user_status
+    ON workflows(user_id, status);
+
+    -- Optimize queries with EXPLAIN ANALYZE
+    EXPLAIN ANALYZE
+    SELECT * FROM workflows
+    WHERE user_id = 'user-123' AND status = 'active';
+
+    -- Update table statistics
+    ANALYZE workflows;
+
+    -- Consider partitioning for large tables
+    CREATE TABLE workflows_2024 PARTITION OF workflows
+    FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+    ```
+  </Accordion>
+
+  <Accordion title="Disk Space Issues">
+    **Symptoms**: Database write errors, disk full warnings
+
+    **Diagnosis**:
+    ```bash
+    # Check disk usage
+    df -h
+
+    # Check PostgreSQL data directory size
+    du -sh /var/lib/postgresql/15/main/
+
+    # Check largest tables
+    SELECT
+      schemaname,
+      tablename,
+      pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) as size
+    FROM pg_tables
+    ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
+    ```
+
+    **Solutions**:
+    ```sql
+    -- Clean up old data
+    DELETE FROM audit_logs WHERE created_at < NOW() - INTERVAL '90 days';
+
+    -- Vacuum to reclaim space
+    VACUUM FULL workflows;
+
+    -- Set up automatic cleanup
+    CREATE OR REPLACE FUNCTION cleanup_old_data()
+    RETURNS void AS $$
+    BEGIN
+      DELETE FROM audit_logs WHERE created_at < NOW() - INTERVAL '90 days';
+      DELETE FROM workflow_executions WHERE created_at < NOW() - INTERVAL '180 days'
+        AND status IN ('completed', 'failed');
+    END;
+    $$ LANGUAGE plpgsql;
+
+    -- Schedule cleanup (use cron or pg_cron)
+    SELECT cron.schedule('cleanup-old-data', '0 2 * * *', 'SELECT cleanup_old_data();');
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### ⚙️ Engine (Camunda) Issues
+
+<AccordionGroup>
+  <Accordion title="Process Instance Stuck">
+    **Symptoms**: Workflows not progressing, incidents in Camunda Cockpit
+
+    **Diagnosis**:
+    ```sql
+    -- Check for incidents
+    SELECT * FROM ACT_RU_INCIDENT WHERE PROC_INST_ID_ = 'your-instance-id';
+
+    -- Check external tasks
+    SELECT * FROM ACT_RU_EXT_TASK WHERE PROC_INST_ID_ = 'your-instance-id';
+
+    -- Check job failures
+    SELECT * FROM ACT_RU_JOB WHERE PROCESS_INSTANCE_ID_ = 'your-instance-id';
+    ```
+
+    **Solutions**:
+    ```bash
+    # Check worker logs for errors
+    docker logs guru-workers
+
+    # Restart external task workers
+    docker restart guru-workers
+
+    # Manually retry failed jobs
+    curl -X POST http://localhost:8080/engine-rest/job/{jobId}/retries \
+      -H "Content-Type: application/json" \
+      -d '{"retries": 3}'
+
+    # Delete stuck instances (last resort)
+    curl -X DELETE http://localhost:8080/engine-rest/process-instance/{instanceId}
+    ```
+  </Accordion>
+
+  <Accordion title="High Memory Usage">
+    **Symptoms**: OutOfMemoryError, slow process execution
+
+    **Diagnosis**:
+    ```bash
+    # Check JVM memory usage
+    jstat -gc $(pgrep java)
+
+    # Generate heap dump
+    jcmd $(pgrep java) GC.run_finalization
+    jcmd $(pgrep java) VM.memory
+
+    # Check for large process variables
+    SELECT * FROM ACT_RU_VARIABLE WHERE BYTEARRAY_ID_ IS NOT NULL;
+    ```
+
+    **Solutions**:
+    ```yaml
+    # Increase JVM heap size
+    environment:
+      - JAVA_OPTS=-Xmx4g -Xms2g -XX:+UseG1GC
+
+    # Optimize process variables
+    services:
+      engine:
+        environment:
+          - CAMUNDA_BPM_GENERIC_PROPERTIES_PROPERTIES_HISTORY_LEVEL=ACTIVITY
+          - CAMUNDA_BPM_GENERIC_PROPERTIES_PROPERTIES_HISTORY_TIME_TO_LIVE=P30D
+    ```
+
+    ```java
+    // Use file variables for large data
+    FileValue fileValue = Variables
+        .fileValue("large-data.json")
+        .file(largeDataBytes)
+        .mimeType("application/json")
+        .create();
+
+    runtimeService.setVariable(processInstanceId, "largeData", fileValue);
+    ```
+  </Accordion>
+
+  <Accordion title="Deployment Issues">
+    **Symptoms**: Process deployment fails, BPMN parsing errors
+
+    **Diagnosis**:
+    ```bash
+    # Check deployment logs
+    curl http://localhost:8080/engine-rest/deployment
+
+    # Validate BPMN file
+    # Use Camunda Modeler to check for errors
+
+    # Check process definition
+    curl http://localhost:8080/engine-rest/process-definition
+    ```
+
+    **Solutions**:
+    ```java
+    // Fix common BPMN issues
+    // 1. Missing start event
+    // 2. Unreachable activities
+    // 3. Invalid expressions
+
+    // Proper service task configuration
+    <bpmn:serviceTask id="processTask"
+                      name="Process Data"
+                      camunda:type="external"
+                      camunda:topic="data-processing">
+      <bpmn:extensionElements>
+        <camunda:inputOutput>
+          <camunda:inputParameter name="data">${inputData}</camunda:inputParameter>
+        </camunda:inputOutput>
+      </bpmn:extensionElements>
+    </bpmn:serviceTask>
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### 🐍 Workers Issues
+
+<AccordionGroup>
+  <Accordion title="Workers Not Receiving Tasks">
+    **Symptoms**: Tasks queued but not processed, external task backlog
+
+    **Diagnosis**:
+    ```bash
+    # Check worker status
+    docker logs guru-workers
+
+    # Check external tasks in Camunda
+    curl http://localhost:8080/engine-rest/external-task
+
+    # Check worker registration
+    grep "Subscribed to topic" logs/workers.log
+    ```
+
+    **Solutions**:
+    ```python
+    # Fix worker subscription
+    @worker_manager.subscribe("trading-execution", lock_duration=60000)
+    async def handle_trading_task(task):
+        try:
+            # Process task
+            result = await execute_trading_logic(task.variables)
+            await task.complete({"result": result})
+        except Exception as e:
+            await task.handle_failure(str(e), details="Trading logic failed", retries=2)
+
+    # Check network connectivity
+    async def test_camunda_connection():
+        try:
+            response = await httpx.get("http://camunda:8080/engine-rest/version")
+            print(f"Camunda version: {response.json()}")
+        except Exception as e:
+            print(f"Cannot connect to Camunda: {e}")
+    ```
+
+    ```bash
+    # Restart workers with debugging
+    docker restart guru-workers
+    docker logs -f guru-workers
+    ```
+  </Accordion>
+
+  <Accordion title="Worker Memory Issues">
+    **Symptoms**: Workers crashing, memory errors, slow processing
+
+    **Diagnosis**:
+    ```bash
+    # Monitor worker memory usage
+    docker stats guru-workers
+
+    # Check for memory leaks in Python
+    pip install memory-profiler
+    python -m memory_profiler worker_main.py
+    ```
+
+    **Solutions**:
+    ```python
+    # Implement proper memory management
+    class WorkerManager:
+        def __init__(self):
+            self.max_concurrent_tasks = 10  # Limit concurrent processing
+            self.semaphore = asyncio.Semaphore(self.max_concurrent_tasks)
+
+        async def process_task(self, task):
+            async with self.semaphore:  # Limit concurrency
+                try:
+                    # Process task
+                    result = await self.execute_task(task)
+                    return result
+                finally:
+                    # Cleanup resources
+                    await self.cleanup_task_resources()
+
+        async def cleanup_task_resources(self):
+            # Close database connections
+            # Clear temporary files
+            # Release memory
+            import gc
+            gc.collect()
+    ```
+
+    ```dockerfile
+    # Limit worker container memory
+    services:
+      workers:
+        deploy:
+          resources:
+            limits:
+              memory: 1G
+            reservations:
+              memory: 512M
+    ```
+  </Accordion>
+
+  <Accordion title="Blockchain Connection Issues">
+    **Symptoms**: Blockchain operations fail, RPC errors, network timeouts
+
+    **Diagnosis**:
+    ```python
+    # Test blockchain connectivity
+    from web3 import Web3
+
+    async def test_blockchain_connection():
+        w3 = Web3(Web3.HTTPProvider(RPC_URL))
+
+        try:
+            # Test connection
+            latest_block = await w3.eth.get_block('latest')
+            print(f"Connected to blockchain. Latest block: {latest_block.number}")
+
+            # Test account balance
+            balance = await w3.eth.get_balance(WALLET_ADDRESS)
+            print(f"Wallet balance: {w3.fromWei(balance, 'ether')} ETH")
+
+        except Exception as e:
+            print(f"Blockchain connection failed: {e}")
+    ```
+
+    **Solutions**:
+    ```python
+    # Implement retry logic
+    import tenacity
+
+    @tenacity.retry(
+        stop=tenacity.stop_after_attempt(3),
+        wait=tenacity.wait_exponential(multiplier=1, min=4, max=10),
+        retry=tenacity.retry_if_exception_type(Exception)
+    )
+    async def execute_blockchain_transaction(transaction_data):
+        try:
+            # Execute transaction
+            tx_hash = await w3.eth.send_transaction(transaction_data)
+            receipt = await w3.eth.wait_for_transaction_receipt(tx_hash)
+            return receipt
+        except Exception as e:
+            logger.error(f"Blockchain transaction failed: {e}")
+            raise
+
+    # Use multiple RPC endpoints
+    RPC_ENDPOINTS = [
+        "https://mainnet.infura.io/v3/YOUR-PROJECT-ID",
+        "https://eth-mainnet.alchemyapi.io/v2/YOUR-API-KEY",
+        "https://api.mycryptoapi.com/eth"
+    ]
+
+    class BlockchainClient:
+        def __init__(self):
+            self.current_endpoint = 0
+            self.w3 = self._get_web3_client()
+
+        def _get_web3_client(self):
+            return Web3(Web3.HTTPProvider(RPC_ENDPOINTS[self.current_endpoint]))
+
+        async def execute_with_fallback(self, operation):
+            for attempt in range(len(RPC_ENDPOINTS)):
+                try:
+                    return await operation(self.w3)
+                except Exception as e:
+                    logger.warning(f"RPC endpoint {self.current_endpoint} failed: {e}")
+                    self.current_endpoint = (self.current_endpoint + 1) % len(RPC_ENDPOINTS)
+                    self.w3 = self._get_web3_client()
+
+            raise Exception("All RPC endpoints failed")
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Performance Issues
+
+### 📊 System Performance
+
+<AccordionGroup>
+  <Accordion title="High CPU Usage">
+    **Symptoms**: Slow response times, system overload
+
+    **Diagnosis**:
+    ```bash
+    # Check overall CPU usage
+    top -p $(pgrep -d',' -f guru)
+
+    # Check per-service CPU usage
+    docker stats
+
+    # Profile specific service
+    # For Python services
+    pip install py-spy
+    py-spy top --pid $(pgrep python)
+
+    # For Java services
+    jstack $(pgrep java)
+    ```
+
+    **Solutions**:
+    ```yaml
+    # Scale services horizontally
+    services:
+      flowapi:
+        deploy:
+          replicas: 3
+          resources:
+            limits:
+              cpus: '0.5'
+        environment:
+          - WORKERS=4  # Reduce workers per instance
+
+      workers:
+        deploy:
+          replicas: 2
+    ```
+
+    ```python
+    # Optimize async operations
+    # Use asyncio.gather for parallel operations
+    async def process_multiple_tasks(tasks):
+        # Instead of sequential processing
+        # for task in tasks:
+        #     await process_task(task)
+
+        # Use parallel processing
+        results = await asyncio.gather(
+            *[process_task(task) for task in tasks],
+            return_exceptions=True
+        )
+        return results
+    ```
+  </Accordion>
+
+  <Accordion title="Memory Leaks">
+    **Symptoms**: Gradually increasing memory usage, eventual crashes
+
+    **Diagnosis**:
+    ```bash
+    # Monitor memory usage over time
+    while true; do
+      echo "$(date): $(docker stats --no-stream --format 'table {{.Name}}\t{{.MemUsage}}' | grep guru)"
+      sleep 60
+    done
+
+    # Use memory profiling tools
+    # Python: memory-profiler, tracemalloc
+    # Java: JProfiler, VisualVM
+    ```
+
+    **Solutions**:
+    ```python
+    # Fix common memory leak patterns
+
+    # 1. Close database sessions properly
+    async def safe_db_operation():
+        async with get_db_session() as session:
+            try:
+                # Database operations
+                result = await session.execute(query)
+                await session.commit()
+                return result
+            except Exception:
+                await session.rollback()
+                raise
+            # Session automatically closed
+
+    # 2. Clear circular references
+    import weakref
+
+    class Parent:
+        def __init__(self):
+            self.children = []
+
+    class Child:
+        def __init__(self, parent):
+            self.parent = weakref.ref(parent)  # Weak reference
+            parent.children.append(self)
+
+    # 3. Use context managers for resources
+    @contextlib.asynccontextmanager
+    async def redis_connection():
+        conn = await redis.create_connection()
+        try:
+            yield conn
+        finally:
+            await conn.close()
+    ```
+  </Accordion>
+
+  <Accordion title="Network Latency">
+    **Symptoms**: Slow API responses, timeouts, poor user experience
+
+    **Diagnosis**:
+    ```bash
+    # Test network latency between services
+    ping camunda
+    ping postgres
+    ping redis
+
+    # Check internal Docker networking
+    docker network ls
+    docker network inspect guru_default
+
+    # Monitor network traffic
+    netstat -i
+    iftop
+    ```
+
+    **Solutions**:
+    ```yaml
+    # Optimize Docker networking
+    networks:
+      guru_network:
+        driver: bridge
+        ipam:
+          config:
+            - subnet: 172.20.0.0/16
+
+    services:
+      flowapi:
+        networks:
+          - guru_network
+
+      postgres:
+        networks:
+          - guru_network
+    ```
+
+    ```python
+    # Implement connection pooling and caching
+
+    # HTTP connection pooling
+    import httpx
+
+    class APIClient:
+        def __init__(self):
+            self.client = httpx.AsyncClient(
+                limits=httpx.Limits(
+                    max_keepalive_connections=20,
+                    max_connections=100
+                ),
+                timeout=httpx.Timeout(10.0)
+            )
+
+        async def close(self):
+            await self.client.aclose()
+
+    # Redis caching for expensive operations
+    async def get_user_workflows(user_id: str):
+        cache_key = f"workflows:{user_id}"
+        cached = await redis.get(cache_key)
+
+        if cached:
+            return json.loads(cached)
+
+        workflows = await db.fetch_user_workflows(user_id)
+        await redis.setex(cache_key, 300, json.dumps(workflows))
+        return workflows
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Error Patterns & Solutions
+
+### 🚨 Common Error Messages
+
+<Tabs>
+  <Tab title="Database Errors">
+    ```
+    Error: "connection to server at localhost:5432 failed"
+    Solution:
+    1. Check if PostgreSQL is running: systemctl status postgresql
+    2. Verify connection string in environment variables
+    3. Check firewall rules: sudo ufw status
+    4. Test connection: psql -h localhost -U guru -d guru_db
+    ```
+
+    ```
+    Error: "too many connections for database"
+    Solution:
+    1. Check current connections: SELECT count(*) FROM pg_stat_activity;
+    2. Increase max_connections in postgresql.conf
+    3. Implement connection pooling
+    4. Close unused connections in application code
+    ```
+
+    ```
+    Error: "relation does not exist"
+    Solution:
+    1. Run database migrations: alembic upgrade head
+    2. Check if tables exist: \dt in psql
+    3. Verify schema name in queries
+    4. Check database initialization scripts
+    ```
+  </Tab>
+  <Tab title="Authentication Errors">
+    ```
+    Error: "JWT token has expired"
+    Solution:
+    1. Implement token refresh logic
+    2. Check token expiration time configuration
+    3. Clear browser storage and re-login
+    4. Verify system clock synchronization
+    ```
+
+    ```
+    Error: "Invalid JWT signature"
+    Solution:
+    1. Check JWT secret key consistency across services
+    2. Verify algorithm matches (HS256, RS256, etc.)
+    3. Check for key rotation issues
+    4. Validate token format
+    ```
+
+    ```
+    Error: "User not found or inactive"
+    Solution:
+    1. Check user exists in database
+    2. Verify user.is_active = true
+    3. Check user ID in JWT payload
+    4. Clear browser cache and cookies
+    ```
+  </Tab>
+  <Tab title="Worker Errors">
+    ```
+    Error: "Failed to fetch and lock external tasks"
+    Solution:
+    1. Check Camunda engine connectivity
+    2. Verify worker subscription topics
+    3. Check for network issues between services
+    4. Restart worker service
+    ```
+
+    ```
+    Error: "Task execution timeout"
+    Solution:
+    1. Increase lock duration in worker subscription
+    2. Optimize task processing logic
+    3. Add timeout handling in business logic
+    4. Scale worker instances
+    ```
+
+    ```
+    Error: "Blockchain RPC error"
+    Solution:
+    1. Check RPC endpoint URL and API key
+    2. Verify network connectivity
+    3. Implement retry logic with exponential backoff
+    4. Use multiple RPC providers for redundancy
+    ```
+  </Tab>
+</Tabs>
+
+## Monitoring & Alerting
+
+### 📈 Health Checks
+
+<CodeGroup>
+```bash Health Check Script
+#!/bin/bash
+# health-check.sh
+
+echo "🏥 Guru Network Framework Health Check"
+echo "======================================"
+
+# Function to check service health
+check_service() {
+    local service_name=$1
+    local url=$2
+    local expected_status=${3:-200}
+
+    echo -n "Checking $service_name... "
+
+    response=$(curl -s -o /dev/null -w "%{http_code}" "$url")
+
+    if [ "$response" = "$expected_status" ]; then
+        echo "✅ OK ($response)"
+        return 0
+    else
+        echo "❌ FAILED ($response)"
+        return 1
+    fi
+}
+
+# Check all services
+services_ok=0
+total_services=0
+
+# Frontend
+((total_services++))
+if check_service "Frontend" "http://localhost:3000"; then
+    ((services_ok++))
+fi
+
+# FlowAPI
+((total_services++))
+if check_service "FlowAPI" "http://localhost:8000/health"; then
+    ((services_ok++))
+fi
+
+# Camunda Engine
+((total_services++))
+if check_service "Camunda Engine" "http://localhost:8080/engine-rest/version"; then
+    ((services_ok++))
+fi
+
+# PostgreSQL
+((total_services++))
+echo -n "Checking PostgreSQL... "
+if pg_isready -h localhost -p 5432 -U guru > /dev/null 2>&1; then
+    echo "✅ OK"
+    ((services_ok++))
+else
+    echo "❌ FAILED"
+fi
+
+# Redis
+((total_services++))
+echo -n "Checking Redis... "
+if redis-cli -h localhost -p 6379 ping > /dev/null 2>&1; then
+    echo "✅ OK"
+    ((services_ok++))
+else
+    echo "❌ FAILED"
+fi
+
+# Summary
+echo ""
+echo "Summary: $services_ok/$total_services services healthy"
+
+if [ $services_ok -eq $total_services ]; then
+    echo "🎉 All services are healthy!"
+    exit 0
+else
+    echo "⚠️  Some services are unhealthy"
+    exit 1
+fi
+```
+
+```python Python Health Monitor
+import asyncio
+import aiohttp
+import psycopg2
+import redis
+from datetime import datetime
+import json
+
+class HealthMonitor:
+    def __init__(self):
+        self.services = {
+            'frontend': 'http://localhost:3000',
+            'flowapi': 'http://localhost:8000/health',
+            'camunda': 'http://localhost:8080/engine-rest/version',
+        }
+        self.db_config = {
+            'host': 'localhost',
+            'port': 5432,
+            'user': 'guru',
+            'password': 'password',
+            'database': 'guru_db'
+        }
+        self.redis_config = {
+            'host': 'localhost',
+            'port': 6379,
+            'db': 0
+        }
+
+    async def check_http_service(self, name: str, url: str) -> dict:
+        """Check HTTP service health"""
+        try:
+            async with aiohttp.ClientSession() as session:
+                start_time = datetime.utcnow()
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                    end_time = datetime.utcnow()
+                    response_time = (end_time - start_time).total_seconds() * 1000
+
+                    return {
+                        'service': name,
+                        'status': 'healthy' if response.status == 200 else 'unhealthy',
+                        'response_code': response.status,
+                        'response_time_ms': response_time,
+                        'timestamp': datetime.utcnow().isoformat()
+                    }
+        except Exception as e:
+            return {
+                'service': name,
+                'status': 'unhealthy',
+                'error': str(e),
+                'timestamp': datetime.utcnow().isoformat()
+            }
+
+    def check_database(self) -> dict:
+        """Check PostgreSQL health"""
+        try:
+            start_time = datetime.utcnow()
+            conn = psycopg2.connect(**self.db_config)
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
+            cursor.close()
+            conn.close()
+            end_time = datetime.utcnow()
+
+            response_time = (end_time - start_time).total_seconds() * 1000
+
+            return {
+                'service': 'postgresql',
+                'status': 'healthy',
+                'response_time_ms': response_time,
+                'timestamp': datetime.utcnow().isoformat()
+            }
+        except Exception as e:
+            return {
+                'service': 'postgresql',
+                'status': 'unhealthy',
+                'error': str(e),
+                'timestamp': datetime.utcnow().isoformat()
+            }
+
+    def check_redis(self) -> dict:
+        """Check Redis health"""
+        try:
+            start_time = datetime.utcnow()
+            r = redis.Redis(**self.redis_config)
+            r.ping()
+            end_time = datetime.utcnow()
+
+            response_time = (end_time - start_time).total_seconds() * 1000
+
+            return {
+                'service': 'redis',
+                'status': 'healthy',
+                'response_time_ms': response_time,
+                'timestamp': datetime.utcnow().isoformat()
+            }
+        except Exception as e:
+            return {
+                'service': 'redis',
+                'status': 'unhealthy',
+                'error': str(e),
+                'timestamp': datetime.utcnow().isoformat()
+            }
+
+    async def run_health_check(self) -> dict:
+        """Run complete health check"""
+        results = []
+
+        # Check HTTP services
+        for name, url in self.services.items():
+            result = await self.check_http_service(name, url)
+            results.append(result)
+
+        # Check database
+        db_result = self.check_database()
+        results.append(db_result)
+
+        # Check Redis
+        redis_result = self.check_redis()
+        results.append(redis_result)
+
+        # Calculate overall health
+        healthy_services = sum(1 for r in results if r['status'] == 'healthy')
+        total_services = len(results)
+
+        overall_status = 'healthy' if healthy_services == total_services else 'degraded'
+
+        return {
+            'overall_status': overall_status,
+            'healthy_services': healthy_services,
+            'total_services': total_services,
+            'services': results,
+            'timestamp': datetime.utcnow().isoformat()
+        }
+
+    async def monitor_continuously(self, interval: int = 60):
+        """Continuously monitor services"""
+        while True:
+            try:
+                health_report = await self.run_health_check()
+
+                # Log health status
+                print(f"Health Check: {health_report['overall_status']} "
+                      f"({health_report['healthy_services']}/{health_report['total_services']})")
+
+                # Alert if services are unhealthy
+                if health_report['overall_status'] != 'healthy':
+                    await self.send_alert(health_report)
+
+                # Wait for next check
+                await asyncio.sleep(interval)
+
+            except Exception as e:
+                print(f"Health check error: {e}")
+                await asyncio.sleep(interval)
+
+    async def send_alert(self, health_report: dict):
+        """Send alert for unhealthy services"""
+        unhealthy_services = [
+            s for s in health_report['services']
+            if s['status'] == 'unhealthy'
+        ]
+
+        alert_message = f"🚨 Service Health Alert\n"
+        alert_message += f"Unhealthy services: {len(unhealthy_services)}\n"
+
+        for service in unhealthy_services:
+            alert_message += f"- {service['service']}: {service.get('error', 'Unknown error')}\n"
+
+        # Send to monitoring system (Slack, email, etc.)
+        print(alert_message)
+
+# Usage
+if __name__ == "__main__":
+    monitor = HealthMonitor()
+    asyncio.run(monitor.monitor_continuously())
+```
+</CodeGroup>
+
+## Recovery Procedures
+
+### 🔄 Disaster Recovery
+
+<AccordionGroup>
+  <Accordion title="Complete System Recovery">
+    **Scenario**: All services are down due to infrastructure failure
+
+    **Recovery Steps**:
+    ```bash
+    # 1. Assess the situation
+    ./scripts/health-check.sh
+
+    # 2. Start infrastructure services first
+    docker-compose up -d postgres redis clickhouse elasticsearch
+
+    # 3. Wait for databases to be ready
+    ./scripts/wait-for-services.sh
+
+    # 4. Start application services
+    docker-compose up -d camunda flowapi workers
+
+    # 5. Start frontend last
+    docker-compose up -d frontend
+
+    # 6. Verify all services are healthy
+    ./scripts/health-check.sh
+
+    # 7. Check for data consistency
+    ./scripts/verify-data-integrity.sh
+    ```
+  </Accordion>
+
+  <Accordion title="Database Recovery">
+    **Scenario**: Database corruption or data loss
+
+    **Recovery Steps**:
+    ```bash
+    # 1. Stop all services accessing the database
+    docker-compose stop flowapi workers camunda
+
+    # 2. Create backup of current state (even if corrupted)
+    pg_dump guru_db > corrupted_backup_$(date +%Y%m%d_%H%M%S).sql
+
+    # 3. Restore from latest backup
+    dropdb guru_db
+    createdb guru_db
+    pg_restore -d guru_db latest_backup.sql
+
+    # 4. Run integrity checks
+    psql guru_db -c "SELECT count(*) FROM users;"
+    psql guru_db -c "SELECT count(*) FROM workflows;"
+
+    # 5. Apply any missing migrations
+    cd flowapi && alembic upgrade head
+    cd ../engine && ./gradlew liquibaseUpdate
+
+    # 6. Restart services
+    docker-compose up -d flowapi workers camunda
+
+    # 7. Verify system functionality
+    ./scripts/smoke-test.sh
+    ```
+  </Accordion>
+
+  <Accordion title="Rollback Deployment">
+    **Scenario**: New deployment causes issues, need to rollback
+
+    **Recovery Steps**:
+    ```bash
+    # 1. Identify previous working version
+    docker images | grep guru
+
+    # 2. Stop current services
+    docker-compose down
+
+    # 3. Update docker-compose to use previous versions
+    sed -i 's/guru\/flowapi:latest/guru\/flowapi:v1.2.1/g' docker-compose.yml
+    sed -i 's/guru\/workers:latest/guru\/workers:v1.2.1/g' docker-compose.yml
+
+    # 4. Start services with previous version
+    docker-compose up -d
+
+    # 5. Check if rollback resolved issues
+    ./scripts/health-check.sh
+
+    # 6. If database schema changed, rollback migrations
+    cd flowapi
+    alembic downgrade -1  # Rollback one migration
+
+    cd ../engine
+    ./gradlew liquibaseRollback -PliquibaseCommandValue=1
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Preventive Measures
+
+### 🛡️ Monitoring Setup
+
+<CodeGroup>
+```yaml Prometheus Configuration
+# prometheus.yml
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'guru-flowapi'
+    static_configs:
+      - targets: ['flowapi:8000']
+    metrics_path: '/metrics'
+
+  - job_name: 'guru-engine'
+    static_configs:
+      - targets: ['camunda:8080']
+    metrics_path: '/actuator/prometheus'
+
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+
+rule_files:
+  - "alert_rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+```
+
+```yaml Alert Rules
+# alert_rules.yml
+groups:
+  - name: guru_alerts
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.instance }} is down"
+
+      - alert: HighResponseTime
+        expr: http_request_duration_seconds{quantile="0.95"} > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High response time on {{ $labels.instance }}"
+
+      - alert: DatabaseConnectionsHigh
+        expr: pg_stat_activity_count > 80
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of database connections"
+
+      - alert: WorkerTaskBacklog
+        expr: camunda_external_task_count > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High external task backlog"
+```
+</CodeGroup>
+
+### 📋 Maintenance Checklist
+
+<Tabs>
+  <Tab title="Daily Checks">
+    ```bash
+    # Daily maintenance script
+    #!/bin/bash
+
+    echo "🗓️ Daily Maintenance - $(date)"
+
+    # Check service health
+    ./scripts/health-check.sh
+
+    # Check disk space
+    df -h | grep -E "(8[0-9]|9[0-9])%" && echo "⚠️ High disk usage detected"
+
+    # Check database performance
+    psql guru_db -c "
+    SELECT query, calls, mean_time
+    FROM pg_stat_statements
+    WHERE mean_time > 1000
+    ORDER BY mean_time DESC LIMIT 5;"
+
+    # Check error logs
+    grep -c "ERROR" logs/*.log
+
+    # Check backup status
+    ls -la backups/ | tail -5
+
+    echo "✅ Daily maintenance completed"
+    ```
+  </Tab>
+  <Tab title="Weekly Tasks">
+    ```bash
+    # Weekly maintenance script
+    #!/bin/bash
+
+    echo "📅 Weekly Maintenance - $(date)"
+
+    # Update system packages
+    sudo apt update && sudo apt upgrade -y
+
+    # Clean up old Docker images
+    docker image prune -f
+    docker volume prune -f
+
+    # Vacuum database
+    psql guru_db -c "VACUUM ANALYZE;"
+
+    # Clean up old logs
+    find logs/ -name "*.log" -mtime +7 -delete
+
+    # Check SSL certificate expiration
+    echo | openssl s_client -servername api.guru-network.io -connect api.guru-network.io:443 2>/dev/null | openssl x509 -noout -dates
+
+    # Review security alerts
+    grep -i "security\|attack\|breach" logs/*.log | tail -20
+
+    echo "✅ Weekly maintenance completed"
+    ```
+  </Tab>
+  <Tab title="Monthly Tasks">
+    ```bash
+    # Monthly maintenance script
+    #!/bin/bash
+
+    echo "📊 Monthly Maintenance - $(date)"
+
+    # Generate performance report
+    python scripts/generate_performance_report.py
+
+    # Review user activity
+    psql guru_db -c "
+    SELECT
+      DATE_TRUNC('week', created_at) as week,
+      COUNT(*) as new_users
+    FROM users
+    WHERE created_at > NOW() - INTERVAL '30 days'
+    GROUP BY week ORDER BY week;"
+
+    # Check for unused workflows
+    psql guru_db -c "
+    SELECT COUNT(*) as unused_workflows
+    FROM workflows
+    WHERE last_executed < NOW() - INTERVAL '30 days'
+    OR last_executed IS NULL;"
+
+    # Update dependencies
+    cd frontend && npm audit fix
+    cd ../flowapi && poetry update
+    cd ../engine && ./gradlew dependencyUpdates
+
+    # Run security scan
+    ./scripts/security-scan.sh
+
+    echo "✅ Monthly maintenance completed"
+    ```
+  </Tab>
+</Tabs>
+
+## Support & Escalation
+
+### 📞 Getting Help
+
+<CardGroup cols={2}>
+  <Card title="Internal Support" icon="users">
+    **Level 1**: Development team
+    - Common issues and configuration
+    - Performance optimization
+    - Code-related problems
+
+    **Level 2**: DevOps team
+    - Infrastructure issues
+    - Deployment problems
+    - Security incidents
+
+    **Level 3**: Architecture team
+    - System design issues
+    - Scalability problems
+    - Critical system failures
+  </Card>
+  <Card title="External Support" icon="phone">
+    **Vendor Support**:
+    - Camunda: Enterprise support for BPMN engine
+    - AWS/GCP: Cloud infrastructure issues
+    - Database vendors: PostgreSQL, Redis support
+
+    **Community Support**:
+    - Stack Overflow: General programming issues
+    - GitHub Issues: Framework-specific problems
+    - Discord/Slack: Real-time help
+  </Card>
+</CardGroup>
+
+### 📝 Issue Reporting Template
+
+```markdown
+## Issue Report
+
+**Date/Time**: 2024-01-15 14:30 UTC
+**Reporter**: John Doe (john@guru-network.io)
+**Severity**: High/Medium/Low
+**Environment**: Production/Staging/Development
+
+### Description
+Brief description of the issue
+
+### Steps to Reproduce
+1. Step one
+2. Step two
+3. Step three
+
+### Expected Behavior
+What should happen
+
+### Actual Behavior
+What actually happens
+
+### Error Messages
+```
+Paste error messages here
+```
+
+### Environment Details
+- Browser: Chrome 120.0.0.0
+- OS: Ubuntu 22.04
+- Service Version: v1.2.3
+- Database Version: PostgreSQL 15.1
+
+### Logs
+```
+Relevant log entries
+```
+
+### Impact
+- Users affected: 50 users
+- Services affected: FlowAPI, Workers
+- Business impact: Trading operations delayed
+
+### Temporary Workaround
+If any workaround is available
+
+### Related Issues
+Links to related issues or tickets
+```
+
+<Note>
+  Regular maintenance and monitoring are key to preventing issues. Always keep logs, implement proper error handling, and have recovery procedures ready before problems occur.
+</Note>
+

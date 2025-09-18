@@ -1,0 +1,186 @@
+---
+title: "Key Features"
+description: "Comprehensive overview of Guru Network Framework's powerful features and capabilities"
+icon: "star"
+---
+
+# Key Features
+
+The Guru Network Framework provides a suite of features designed for Web3 workflow automation and blockchain integration.
+
+## 🚀 Core Capabilities
+
+<CardGroup cols={2}>
+  <Card title="BPMN 2.0 Workflow Engine" icon="diagram-project">
+    Industry-standard business process modeling with Camunda Platform for complex automation scenarios and visual workflow design.
+  </Card>
+  <Card title="External Worker System" icon="code">
+    Non-custodial Python workers for secure task processing with blockchain and AI service integration.
+  </Card>
+  <Card title="Multi-Chain Support" icon="link">
+    Native integration with Ethereum, BSC, Polygon, and other EVM-compatible networks for comprehensive blockchain operations.
+  </Card>
+  <Card title="Admin Interface" icon="dashboard">
+    Flask-based administrative dashboard for user management, monitoring, and system configuration.
+  </Card>
+</CardGroup>
+
+## 🔗 Blockchain Integration
+
+### Smart Contract Interaction
+- **Automated contract deployment** and management
+- **Event monitoring** and real-time notifications
+- **Gas optimization** strategies and transaction batching
+- **MEV protection** and sandwich attack prevention
+
+### DeFi Protocol Support
+<AccordionGroup>
+  <Accordion title="DEX Integration">
+    - Uniswap V2/V3, PancakeSwap, SushiSwap
+    - Automated liquidity provision and removal
+    - Multi-hop trading optimization
+    - Slippage protection and price impact analysis
+  </Accordion>
+
+  <Accordion title="Yield Farming">
+    - Automated reward harvesting
+    - Compound strategy execution
+    - Risk assessment and portfolio rebalancing
+    - IL (Impermanent Loss) monitoring and mitigation
+  </Accordion>
+
+  <Accordion title="Lending Protocols">
+    - Aave, Compound integration
+    - Automated borrowing and lending
+    - Liquidation protection strategies
+    - Interest rate optimization
+  </Accordion>
+</AccordionGroup>
+
+## 🤖 AI-Powered Intelligence
+
+### Decision Making Engine
+- **Market sentiment analysis** using NLP and social media data
+- **Technical indicator processing** with machine learning models
+- **Risk scoring** algorithms for portfolio management
+- **Predictive analytics** for market trend identification
+
+### Intelligent Automation
+<CardGroup cols={2}>
+  <Card title="Strategy Optimization" icon="brain">
+    AI-driven parameter tuning and strategy performance optimization using historical data and backtesting.
+  </Card>
+  <Card title="Anomaly Detection" icon="shield-exclamation">
+    Real-time monitoring for unusual market conditions, smart contract exploits, and system anomalies.
+  </Card>
+</CardGroup>
+
+## 🔒 Security & Compliance
+
+### Multi-Layer Security
+<Steps>
+  <Step title="Authentication & Authorization">
+    JWT-based authentication with MFA support, role-based access control (RBAC), and OAuth2 integration
+  </Step>
+  <Step title="Data Protection">
+    End-to-end encryption, secure key management with HSM support, and PII data anonymization
+  </Step>
+  <Step title="Network Security">
+    TLS 1.3 encryption, API rate limiting, DDoS protection, and VPN/firewall integration
+  </Step>
+  <Step title="Audit & Compliance">
+    Comprehensive audit logging, GDPR compliance tools, and SOC 2 Type II readiness
+  </Step>
+</Steps>
+
+### Wallet Security
+- **Non-custodial architecture** - users maintain control of private keys
+- **Hardware wallet integration** (Ledger, Trezor support)
+- **Multi-signature wallet** support for enterprise accounts
+- **Cold storage** integration for large fund management
+
+## 📊 Analytics & Monitoring
+
+### Real-time Dashboards
+<CardGroup cols={3}>
+  <Card title="Portfolio Tracking" icon="chart-line">
+    Real-time P&L tracking, asset allocation visualization, and performance benchmarking
+  </Card>
+  <Card title="System Monitoring" icon="gauge">
+    Service health metrics, transaction monitoring, and error tracking with alerting
+  </Card>
+  <Card title="Market Analytics" icon="chart-bar">
+    Price feed aggregation, volume analysis, and market depth visualization
+  </Card>
+</CardGroup>
+
+## 🔧 Developer Experience
+
+### Easy Integration
+<Tabs>
+  <Tab title="REST API">
+    ```python
+    # Simple API integration
+    import requests
+
+    response = requests.post('https://api.gurunetwork.ai/v1/strategies', {
+        'name': 'DCA Bitcoin',
+        'type': 'recurring_buy',
+        'parameters': {
+            'asset': 'BTC',
+            'amount': 100,
+            'frequency': 'daily'
+        }
+    }, headers={'Authorization': f'Bearer {token}'})
+    ```
+  </Tab>
+  <Tab title="WebSocket">
+    ```javascript
+    // Real-time data streaming
+    const ws = new WebSocket('wss://api.gurunetwork.ai/v1/stream');
+
+    ws.on('message', (data) => {
+        const event = JSON.parse(data);
+        if (event.type === 'price_update') {
+            updatePortfolioValue(event.data);
+        }
+    });
+    ```
+  </Tab>
+  <Tab title="SDK">
+    ```python
+    # Python SDK
+    from guru_network import GuruClient
+
+    client = GuruClient(api_key='your-api-key')
+
+    # Create automated trading strategy
+    strategy = client.strategies.create({
+        'name': 'Arbitrage Bot',
+        'type': 'arbitrage',
+        'exchanges': ['uniswap', 'sushiswap'],
+        'min_profit': 0.5  # 0.5% minimum profit
+    })
+
+    # Start strategy execution
+    strategy.start()
+    ```
+  </Tab>
+</Tabs>
+
+## 🚀 Getting Started
+
+Ready to explore these features? Check out our:
+
+<CardGroup cols={2}>
+  <Card title="Quick Start Guide" icon="rocket" href="/quick-start/installation">
+    Get up and running in 5 minutes with our streamlined setup process
+  </Card>
+  <Card title="Use Cases" icon="lightbulb" href="/introduction/use-cases">
+    Explore real-world scenarios and implementation examples
+  </Card>
+</CardGroup>
+
+<Note>
+  All features are designed with security, scalability, and ease of use in mind. The Guru Network Framework grows with your needs, from simple automation to complex enterprise deployments.
+</Note>

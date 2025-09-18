@@ -1,0 +1,104 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "name": "Guru Network Framework",
+  "description": "Enterprise-grade Web3 automation platform bridging traditional web services with blockchain technology",
+  "defaultPage": "index",
+  "logo": {
+    "light": "/images/logo.png",
+    "dark": "/images/logo.png",
+    "href": "https://gurunetwork.ai"
+  },
+  "favicon": "/images/favicon.png",
+  "colors": {
+    "primary": "#3B82F6",
+    "light": "#F8FAFC",
+    "dark": "#0F172A",
+    "background": {
+      "light": "#FFFFFF",
+      "dark": "#111827"
+    }
+  },
+  "topbarCtaButton": {
+    "name": "Get Started",
+    "url": "https://gurunetwork.ai"
+  },
+  "topbarLinks": [
+    {
+      "name": "GitHub",
+      "url": "https://github.com/dex-guru/guru-framework"
+    },
+    {
+      "name": "Discord",
+      "url": "https://discord.gg/dPW8fzwzz9"
+    }
+  ],
+  "navigation": [
+    {
+      "group": "Getting Started",
+      "icon": "play",
+      "pages": [
+        "introduction/overview",
+        "introduction/features",
+        "introduction/use-cases",
+        "quick-start/installation"
+      ]
+    },
+    {
+      "group": "Architecture",
+      "icon": "sitemap",
+      "pages": [
+        "architecture/system-design"
+      ]
+    },
+    {
+      "group": "Core Components",
+      "icon": "puzzle-piece",
+      "pages": [
+        "components/engine",
+        "components/workers",
+        "components/flowapi"
+      ]
+    },
+    {
+      "group": "Development",
+      "icon": "terminal",
+      "pages": [
+        "development/environment",
+        "development/api-development",
+        "development/testing"
+      ]
+    },
+    {
+      "group": "Deployment",
+      "icon": "server",
+      "pages": [
+        "deployment/docker"
+      ]
+    },
+    {
+      "group": "Security",
+      "icon": "shield",
+      "pages": [
+        "security/api-security"
+      ]
+    },
+    {
+      "group": "Troubleshooting",
+      "icon": "wrench",
+      "pages": [
+        "troubleshooting/common-issues"
+      ]
+    }
+  ],
+  "footerSocials": {
+    "github": "https://github.com/dex-guru/guru-framework",
+    "x": "https://x.com/xgurunetwork",
+    "discord": "https://discord.gg/dPW8fzwzz9",
+    "youtube": "https://www.youtube.com/@gurunetwork_ai"
+  },
+  "analytics": {
+    "ga4": {
+      "measurementId": "G-XXXXXXXXXX"
+    }
+  }
+}

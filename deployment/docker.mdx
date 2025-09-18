@@ -1,0 +1,1106 @@
+---
+title: "Docker Deployment"
+description: "Deploy the Guru Network Framework using Docker and Docker Compose"
+icon: "docker"
+---
+
+# Docker Deployment
+
+Docker provides the simplest deployment method for the Guru Network Framework. This guide covers both development and production deployments using Docker Compose.
+
+## Overview
+
+<CardGroup cols={2}>
+  <Card title="Development Setup" icon="laptop-code">
+    Single-machine deployment with hot reloading and debug features
+  </Card>
+  <Card title="Production Setup" icon="server">
+    Multi-node deployment with health checks and monitoring
+  </Card>
+  <Card title="Container Orchestration" icon="cubes">
+    Docker Compose for service coordination and networking
+  </Card>
+  <Card title="Persistent Storage" icon="database">
+    Volume management for databases and configuration
+  </Card>
+</CardGroup>
+
+## Docker Compose Configuration
+
+### 🚀 Production Docker Compose
+
+<Tabs>
+  <Tab title="docker-compose.yml">
+    ```yaml
+    version: '3.8'
+
+    services:
+      # Infrastructure Services
+      postgres:
+        image: postgres:14-alpine
+        environment:
+          POSTGRES_DB: guru_db
+          POSTGRES_USER: guru
+          POSTGRES_PASSWORD: ${DB_PASSWORD}
+          POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+        volumes:
+          - postgres_data:/var/lib/postgresql/data
+          - ./postgres/init:/docker-entrypoint-initdb.d
+        ports:
+          - "5432:5432"
+        healthcheck:
+          test: ["CMD-SHELL", "pg_isready -U guru -d guru_db"]
+          interval: 10s
+          timeout: 5s
+          retries: 5
+        restart: unless-stopped
+        networks:
+          - guru-network
+
+      redis:
+        image: redis:7-alpine
+        command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+        volumes:
+          - redis_data:/data
+        ports:
+          - "6379:6379"
+        healthcheck:
+          test: ["CMD", "redis-cli", "ping"]
+          interval: 10s
+          timeout: 3s
+          retries: 3
+        restart: unless-stopped
+        networks:
+          - guru-network
+
+      clickhouse:
+        image: clickhouse/clickhouse-server:latest
+        environment:
+          CLICKHOUSE_DB: analytics
+          CLICKHOUSE_USER: guru
+          CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+        volumes:
+          - clickhouse_data:/var/lib/clickhouse
+          - ./clickhouse/config.xml:/etc/clickhouse-server/config.xml
+        ports:
+          - "8123:8123"
+          - "9000:9000"
+        healthcheck:
+          test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
+          interval: 30s
+          timeout: 10s
+          retries: 3
+        restart: unless-stopped
+        networks:
+          - guru-network
+
+      elasticsearch:
+        image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+        environment:
+          - discovery.type=single-node
+          - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+          - xpack.security.enabled=false
+        volumes:
+          - elasticsearch_data:/usr/share/elasticsearch/data
+        ports:
+          - "9200:9200"
+        healthcheck:
+          test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+          interval: 30s
+          timeout: 10s
+          retries: 3
+        restart: unless-stopped
+        networks:
+          - guru-network
+
+      rabbitmq:
+        image: rabbitmq:3.12-management-alpine
+        environment:
+          RABBITMQ_DEFAULT_USER: guru
+          RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+        volumes:
+          - rabbitmq_data:/var/lib/rabbitmq
+        ports:
+          - "5672:5672"
+          - "15672:15672"
+        healthcheck:
+          test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+          interval: 30s
+          timeout: 10s
+          retries: 3
+        restart: unless-stopped
+        networks:
+          - guru-network
+
+      # Core Application Services
+      engine:
+        build:
+          context: ./engine
+          dockerfile: Dockerfile.prod
+        environment:
+          - DATABASE_URL=postgresql://guru:${DB_PASSWORD}@postgres:5432/guru_db
+          - CAMUNDA_ADMIN_USER=${CAMUNDA_ADMIN_USER:-admin}
+          - CAMUNDA_ADMIN_PASSWORD=${CAMUNDA_ADMIN_PASSWORD}
+          - JVM_OPTS=-Xms1g -Xmx2g
+        volumes:
+          - ./engine/processes:/app/processes
+          - engine_logs:/app/logs
+        ports:
+          - "8080:8080"
+        depends_on:
+          postgres:
+            condition: service_healthy
+        healthcheck:
+          test: ["CMD", "curl", "-f", "http://localhost:8080/engine-rest/engine"]
+          interval: 30s
+          timeout: 10s
+          retries: 3
+        restart: unless-stopped
+        networks:
+          - guru-network
+
+      flowapi:
+        build:
+          context: ./flowapi
+          dockerfile: Dockerfile.prod
+        environment:
+          - DATABASE_URL=postgresql://guru:${DB_PASSWORD}@postgres:5432/guru_db
+          - REDIS_URL=redis://redis:6379
+          - ENGINE_URL=http://engine:8080
+          - JWT_SECRET=${JWT_SECRET}
+          - OPENAI_API_KEY=${OPENAI_API_KEY}
+          - ETHEREUM_RPC_URL=${ETHEREUM_RPC_URL}
+        volumes:
+          - flowapi_logs:/app/logs
+        ports:
+          - "8000:8000"
+        depends_on:
+          postgres:
+            condition: service_healthy
+          redis:
+            condition: service_healthy
+          engine:
+            condition: service_healthy
+        healthcheck:
+          test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+          interval: 30s
+          timeout: 10s
+          retries: 3
+        restart: unless-stopped
+        networks:
+          - guru-network
+
+      frontend:
+        build:
+          context: ./frontend
+          dockerfile: Dockerfile.prod
+        environment:
+          - NEXT_PUBLIC_API_URL=http://flowapi:8000
+          - NEXT_PUBLIC_WS_URL=ws://flowapi:8000
+        ports:
+          - "3000:3000"
+        depends_on:
+          flowapi:
+            condition: service_healthy
+        healthcheck:
+          test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+          interval: 30s
+          timeout: 10s
+          retries: 3
+        restart: unless-stopped
+        networks:
+          - guru-network
+
+      worker:
+        build:
+          context: ./worker
+          dockerfile: Dockerfile.prod
+        environment:
+          - ENGINE_URL=http://engine:8080
+          - REDIS_URL=redis://redis:6379
+          - ETHEREUM_RPC_URL=${ETHEREUM_RPC_URL}
+          - PRIVATE_KEY=${PRIVATE_KEY}
+          - OPENAI_API_KEY=${OPENAI_API_KEY}
+          - WORKER_ID=guru-worker-${HOSTNAME}
+        volumes:
+          - ./worker/models:/app/models:ro
+          - worker_logs:/app/logs
+        depends_on:
+          engine:
+            condition: service_healthy
+          redis:
+            condition: service_healthy
+        restart: unless-stopped
+        networks:
+          - guru-network
+        deploy:
+          replicas: 3
+
+      warehouse:
+        build:
+          context: ./warehouse
+          dockerfile: Dockerfile.prod
+        environment:
+          - DATABASE_URL=postgresql://guru:${DB_PASSWORD}@postgres:5432/guru_db
+          - CLICKHOUSE_URL=http://clickhouse:8123
+          - ELASTICSEARCH_URL=http://elasticsearch:9200
+          - REDIS_URL=redis://redis:6379
+        volumes:
+          - warehouse_logs:/app/logs
+        ports:
+          - "8001:8001"
+        depends_on:
+          postgres:
+            condition: service_healthy
+          clickhouse:
+            condition: service_healthy
+          elasticsearch:
+            condition: service_healthy
+        healthcheck:
+          test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+          interval: 30s
+          timeout: 10s
+          retries: 3
+        restart: unless-stopped
+        networks:
+          - guru-network
+
+      bot:
+        build:
+          context: ./bot
+          dockerfile: Dockerfile.prod
+        environment:
+          - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+          - FLOWAPI_URL=http://flowapi:8000
+        volumes:
+          - bot_logs:/app/logs
+        depends_on:
+          flowapi:
+            condition: service_healthy
+        restart: unless-stopped
+        networks:
+          - guru-network
+
+    volumes:
+      postgres_data:
+      redis_data:
+      clickhouse_data:
+      elasticsearch_data:
+      rabbitmq_data:
+      engine_logs:
+      flowapi_logs:
+      worker_logs:
+      warehouse_logs:
+      bot_logs:
+
+    networks:
+      guru-network:
+        driver: bridge
+        ipam:
+          config:
+            - subnet: 172.20.0.0/16
+    ```
+  </Tab>
+  <Tab title="Environment Configuration">
+    ```bash
+    # .env.production
+    # Database Configuration
+    DB_PASSWORD=secure_db_password_here
+    CLICKHOUSE_PASSWORD=secure_clickhouse_password
+    RABBITMQ_PASSWORD=secure_rabbitmq_password
+
+    # Authentication
+    JWT_SECRET=your_256_bit_secret_key_here
+    CAMUNDA_ADMIN_PASSWORD=secure_admin_password
+
+    # Blockchain Configuration
+    ETHEREUM_RPC_URL=https://mainnet.infura.io/v3/YOUR_PROJECT_ID
+    BSC_RPC_URL=https://bsc-dataseed.binance.org/
+    POLYGON_RPC_URL=https://polygon-mainnet.infura.io/v3/YOUR_PROJECT_ID
+    PRIVATE_KEY=your_encrypted_private_key
+
+    # AI Services
+    OPENAI_API_KEY=sk-your_openai_api_key_here
+
+    # Telegram Bot (Optional)
+    TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+
+    # Monitoring
+    SENTRY_DSN=your_sentry_dsn_here
+    PROMETHEUS_ENABLED=true
+
+    # Logging
+    LOG_LEVEL=INFO
+    LOG_FORMAT=json
+    ```
+  </Tab>
+</Tabs>
+
+### 🛠️ Development Docker Compose
+
+<Tabs>
+  <Tab title="docker-compose.dev.yml">
+    ```yaml
+    version: '3.8'
+
+    services:
+      postgres:
+        image: postgres:14-alpine
+        environment:
+          POSTGRES_DB: guru_dev
+          POSTGRES_USER: guru
+          POSTGRES_PASSWORD: devpassword
+        volumes:
+          - postgres_dev_data:/var/lib/postgresql/data
+        ports:
+          - "5432:5432"
+        networks:
+          - guru-dev
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - "6379:6379"
+        networks:
+          - guru-dev
+
+      # Development services with hot reloading
+      engine:
+        build:
+          context: ./engine
+          dockerfile: Dockerfile.dev
+        environment:
+          - DATABASE_URL=postgresql://guru:devpassword@postgres:5432/guru_dev
+          - SPRING_PROFILES_ACTIVE=dev
+        volumes:
+          - ./engine/src:/app/src
+          - ./engine/processes:/app/processes
+        ports:
+          - "8080:8080"
+          - "5005:5005"  # Debug port
+        depends_on:
+          - postgres
+        networks:
+          - guru-dev
+
+      flowapi:
+        build:
+          context: ./flowapi
+          dockerfile: Dockerfile.dev
+        environment:
+          - DATABASE_URL=postgresql://guru:devpassword@postgres:5432/guru_dev
+          - REDIS_URL=redis://redis:6379
+          - ENGINE_URL=http://engine:8080
+          - DEBUG=true
+          - LOG_LEVEL=DEBUG
+        volumes:
+          - ./flowapi:/app
+        ports:
+          - "8000:8000"
+        depends_on:
+          - postgres
+          - redis
+        networks:
+          - guru-dev
+
+      frontend:
+        build:
+          context: ./frontend
+          dockerfile: Dockerfile.dev
+        environment:
+          - NEXT_PUBLIC_API_URL=http://localhost:8000
+          - NEXT_PUBLIC_WS_URL=ws://localhost:8000
+        volumes:
+          - ./frontend:/app
+          - /app/node_modules
+        ports:
+          - "3000:3000"
+        networks:
+          - guru-dev
+
+    volumes:
+      postgres_dev_data:
+
+    networks:
+      guru-dev:
+        driver: bridge
+    ```
+  </Tab>
+  <Tab title="Development Commands">
+    ```bash
+    # Start development environment
+    docker-compose -f docker-compose.dev.yml up -d
+
+    # View logs
+    docker-compose -f docker-compose.dev.yml logs -f
+
+    # Execute commands in containers
+    docker-compose -f docker-compose.dev.yml exec flowapi python manage.py shell
+
+    # Stop development environment
+    docker-compose -f docker-compose.dev.yml down
+
+    # Clean up volumes
+    docker-compose -f docker-compose.dev.yml down -v
+    ```
+  </Tab>
+</Tabs>
+
+## Production Dockerfiles
+
+### 🏗️ Service Dockerfiles
+
+<AccordionGroup>
+  <Accordion title="Engine Dockerfile">
+    ```dockerfile
+    # engine/Dockerfile.prod
+    FROM openjdk:17-jdk-slim as builder
+
+    WORKDIR /build
+
+    # Install build dependencies
+    RUN apt-get update && apt-get install -y \
+        curl \
+        unzip \
+        && rm -rf /var/lib/apt/lists/*
+
+    # Copy Gradle wrapper and dependencies
+    COPY gradle/ gradle/
+    COPY gradlew build.gradle settings.gradle ./
+    RUN chmod +x gradlew
+
+    # Download dependencies
+    RUN ./gradlew dependencies --no-daemon
+
+    # Copy source code
+    COPY src/ src/
+
+    # Build application
+    RUN ./gradlew build --no-daemon -x test
+
+    # Production stage
+    FROM openjdk:17-jdk-slim
+
+    # Install runtime dependencies
+    RUN apt-get update && apt-get install -y \
+        curl \
+        postgresql-client \
+        && rm -rf /var/lib/apt/lists/*
+
+    # Create app user
+    RUN groupadd -r guru && useradd -r -g guru guru
+
+    WORKDIR /app
+
+    # Copy built JAR
+    COPY --from=builder /build/build/libs/*.jar app.jar
+
+    # Copy process definitions
+    COPY processes/ processes/
+
+    # Create logs directory
+    RUN mkdir -p logs && chown guru:guru logs
+
+    # Switch to app user
+    USER guru
+
+    # Health check
+    HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+        CMD curl -f http://localhost:8080/actuator/health || exit 1
+
+    # JVM optimization
+    ENV JVM_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC"
+
+    EXPOSE 8080
+
+    ENTRYPOINT ["sh", "-c", "java $JVM_OPTS -jar app.jar"]
+    ```
+  </Accordion>
+
+  <Accordion title="FlowAPI Dockerfile">
+    ```dockerfile
+    # flowapi/Dockerfile.prod
+    FROM python:3.11-slim as builder
+
+    # Install build dependencies
+    RUN apt-get update && apt-get install -y \
+        gcc \
+        g++ \
+        curl \
+        && rm -rf /var/lib/apt/lists/*
+
+    # Install Poetry
+    RUN pip install poetry
+
+    WORKDIR /build
+
+    # Copy dependency files
+    COPY pyproject.toml poetry.lock ./
+
+    # Configure Poetry
+    RUN poetry config virtualenvs.create false
+
+    # Install dependencies
+    RUN poetry install --only=main --no-dev
+
+    # Production stage
+    FROM python:3.11-slim
+
+    # Install runtime dependencies
+    RUN apt-get update && apt-get install -y \
+        curl \
+        && rm -rf /var/lib/apt/lists/*
+
+    # Create app user
+    RUN groupadd -r guru && useradd -r -g guru guru
+
+    WORKDIR /app
+
+    # Copy Python environment from builder
+    COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+    COPY --from=builder /usr/local/bin /usr/local/bin
+
+    # Copy application code
+    COPY . .
+
+    # Create logs directory
+    RUN mkdir -p logs && chown -R guru:guru /app
+
+    # Switch to app user
+    USER guru
+
+    # Health check
+    HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+        CMD curl -f http://localhost:8000/health || exit 1
+
+    EXPOSE 8000
+
+    CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+    ```
+  </Accordion>
+
+  <Accordion title="Frontend Dockerfile">
+    ```dockerfile
+    # frontend/Dockerfile.prod
+    FROM node:18-alpine as builder
+
+    WORKDIR /build
+
+    # Install dependencies
+    COPY package.json pnpm-lock.yaml ./
+    RUN npm install -g pnpm
+    RUN pnpm install --frozen-lockfile
+
+    # Copy source code
+    COPY . .
+
+    # Build application
+    ENV NODE_ENV=production
+    RUN pnpm build
+
+    # Production stage
+    FROM node:18-alpine
+
+    # Install dumb-init for proper signal handling
+    RUN apk add --no-cache dumb-init
+
+    # Create app user
+    RUN addgroup -g 1001 -S nodejs
+    RUN adduser -S nextjs -u 1001
+
+    WORKDIR /app
+
+    # Copy built application
+    COPY --from=builder --chown=nextjs:nodejs /build/.next/standalone ./
+    COPY --from=builder --chown=nextjs:nodejs /build/.next/static ./.next/static
+    COPY --from=builder --chown=nextjs:nodejs /build/public ./public
+
+    USER nextjs
+
+    # Health check
+    HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+        CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1
+
+    EXPOSE 3000
+
+    ENV PORT 3000
+    ENV HOSTNAME 0.0.0.0
+
+    ENTRYPOINT ["dumb-init", "--"]
+    CMD ["node", "server.js"]
+    ```
+  </Accordion>
+
+  <Accordion title="Worker Dockerfile">
+    ```dockerfile
+    # worker/Dockerfile.prod
+    FROM python:3.11-slim
+
+    # Install system dependencies
+    RUN apt-get update && apt-get install -y \
+        gcc \
+        g++ \
+        curl \
+        && rm -rf /var/lib/apt/lists/*
+
+    # Create app user
+    RUN groupadd -r guru && useradd -r -g guru guru
+
+    WORKDIR /app
+
+    # Install Python dependencies
+    COPY requirements.txt .
+    RUN pip install --no-cache-dir -r requirements.txt
+
+    # Copy application code
+    COPY . .
+
+    # Create directories and set permissions
+    RUN mkdir -p logs models && chown -R guru:guru /app
+
+    # Switch to app user
+    USER guru
+
+    # Health check
+    HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+        CMD python health_check.py || exit 1
+
+    CMD ["python", "main.py"]
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Deployment Commands
+
+### 🚀 Production Deployment
+
+<Steps>
+  <Step title="Prepare Environment">
+    ```bash
+    # Clone repository
+    git clone https://github.com/guru-network/guru-network-mono.git
+    cd guru-network-mono
+
+    # Create production environment file
+    cp .env.example .env.production
+
+    # Edit environment variables
+    nano .env.production
+    ```
+  </Step>
+  <Step title="Build and Deploy">
+    ```bash
+    # Build all images
+    docker-compose --env-file .env.production build
+
+    # Start infrastructure services first
+    docker-compose --env-file .env.production up -d postgres redis clickhouse elasticsearch rabbitmq
+
+    # Wait for infrastructure to be ready
+    ./scripts/wait-for-services.sh
+
+    # Start application services
+    docker-compose --env-file .env.production up -d engine flowapi frontend worker warehouse bot
+
+    # Verify deployment
+    docker-compose --env-file .env.production ps
+    ```
+  </Step>
+  <Step title="Initialize System">
+    ```bash
+    # Run database migrations
+    docker-compose --env-file .env.production exec engine ./gradlew flywayMigrate
+    docker-compose --env-file .env.production exec flowapi python -m alembic upgrade head
+
+    # Seed initial data
+    docker-compose --env-file .env.production exec flowapi python scripts/seed_production_data.py
+
+    # Deploy initial workflows
+    docker-compose --env-file .env.production exec engine curl -X POST \
+      -F "deployment-name=initial-workflows" \
+      -F "deployment-source=processes.zip" \
+      http://localhost:8080/engine-rest/deployment/create
+    ```
+  </Step>
+</Steps>
+
+### 🔄 Update Deployment
+
+<Tabs>
+  <Tab title="Rolling Update">
+    ```bash
+    #!/bin/bash
+    # scripts/rolling-update.sh
+
+    set -e
+
+    echo "Starting rolling update..."
+
+    # Pull latest images
+    docker-compose --env-file .env.production pull
+
+    # Update services one by one to minimize downtime
+    SERVICES=("worker" "warehouse" "bot" "flowapi" "frontend" "engine")
+
+    for service in "${SERVICES[@]}"; do
+        echo "Updating $service..."
+
+        # Scale up new instance
+        docker-compose --env-file .env.production up -d --scale $service=2 $service
+
+        # Wait for health check
+        sleep 30
+
+        # Scale down old instance
+        docker-compose --env-file .env.production up -d --scale $service=1 $service
+
+        echo "$service updated successfully"
+    done
+
+    echo "Rolling update completed!"
+    ```
+  </Tab>
+  <Tab title="Blue-Green Deployment">
+    ```bash
+    #!/bin/bash
+    # scripts/blue-green-deploy.sh
+
+    set -e
+
+    CURRENT_ENV=${1:-blue}
+    NEW_ENV=$([ "$CURRENT_ENV" = "blue" ] && echo "green" || echo "blue")
+
+    echo "Deploying to $NEW_ENV environment..."
+
+    # Deploy to new environment
+    docker-compose -f docker-compose.$NEW_ENV.yml --env-file .env.production up -d
+
+    # Run health checks
+    ./scripts/health-check.sh $NEW_ENV
+
+    if [ $? -eq 0 ]; then
+        echo "Health checks passed. Switching traffic to $NEW_ENV..."
+
+        # Update load balancer to point to new environment
+        ./scripts/switch-traffic.sh $NEW_ENV
+
+        # Wait and verify
+        sleep 60
+        ./scripts/verify-traffic.sh $NEW_ENV
+
+        if [ $? -eq 0 ]; then
+            echo "Traffic switched successfully. Stopping $CURRENT_ENV..."
+            docker-compose -f docker-compose.$CURRENT_ENV.yml down
+        else
+            echo "Traffic switch failed. Rolling back..."
+            ./scripts/switch-traffic.sh $CURRENT_ENV
+            docker-compose -f docker-compose.$NEW_ENV.yml down
+        fi
+    else
+        echo "Health checks failed. Cleaning up $NEW_ENV..."
+        docker-compose -f docker-compose.$NEW_ENV.yml down
+        exit 1
+    fi
+    ```
+  </Tab>
+</Tabs>
+
+## Monitoring & Logging
+
+### 📊 Docker Compose Monitoring Stack
+
+```yaml
+# docker-compose.monitoring.yml
+version: '3.8'
+
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - guru-network
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    ports:
+      - "3001:3000"
+    networks:
+      - guru-network
+
+  loki:
+    image: grafana/loki:latest
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./monitoring/loki-config.yaml:/etc/loki/local-config.yaml
+      - loki_data:/loki
+    ports:
+      - "3100:3100"
+    networks:
+      - guru-network
+
+  promtail:
+    image: grafana/promtail:latest
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - ./monitoring/promtail-config.yml:/etc/promtail/config.yml
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    networks:
+      - guru-network
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  loki_data:
+
+networks:
+  guru-network:
+    external: true
+```
+
+### 📋 Prometheus Configuration
+
+```yaml
+# monitoring/prometheus.yml
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "alert_rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+scrape_configs:
+  - job_name: 'guru-flowapi'
+    static_configs:
+      - targets: ['flowapi:8000']
+    metrics_path: '/metrics'
+
+  - job_name: 'guru-engine'
+    static_configs:
+      - targets: ['engine:8080']
+    metrics_path: '/actuator/prometheus'
+
+  - job_name: 'guru-warehouse'
+    static_configs:
+      - targets: ['warehouse:8001']
+    metrics_path: '/metrics'
+
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+
+  - job_name: 'docker'
+    static_configs:
+      - targets: ['cadvisor:8080']
+```
+
+## Backup & Recovery
+
+### 💾 Backup Strategy
+
+<AccordionGroup>
+  <Accordion title="Database Backup">
+    ```bash
+    #!/bin/bash
+    # scripts/backup-database.sh
+
+    BACKUP_DIR="/backups/$(date +%Y-%m-%d)"
+    mkdir -p $BACKUP_DIR
+
+    # PostgreSQL backup
+    docker-compose exec postgres pg_dump -U guru guru_db | gzip > $BACKUP_DIR/postgres_$(date +%Y%m%d_%H%M%S).sql.gz
+
+    # ClickHouse backup
+    docker-compose exec clickhouse clickhouse-client --query "BACKUP DATABASE analytics TO Disk('backup', '$BACKUP_DIR/clickhouse_$(date +%Y%m%d_%H%M%S)')"
+
+    # Redis backup
+    docker-compose exec redis redis-cli BGSAVE
+    docker cp $(docker-compose ps -q redis):/data/dump.rdb $BACKUP_DIR/redis_$(date +%Y%m%d_%H%M%S).rdb
+
+    echo "Backup completed: $BACKUP_DIR"
+    ```
+  </Accordion>
+
+  <Accordion title="Volume Backup">
+    ```bash
+    #!/bin/bash
+    # scripts/backup-volumes.sh
+
+    BACKUP_DIR="/backups/volumes/$(date +%Y-%m-%d)"
+    mkdir -p $BACKUP_DIR
+
+    # Get volume names
+    VOLUMES=$(docker volume ls -q | grep guru)
+
+    for volume in $VOLUMES; do
+        echo "Backing up volume: $volume"
+
+        # Create temporary container to access volume
+        docker run --rm \
+            -v $volume:/data \
+            -v $BACKUP_DIR:/backup \
+            alpine \
+            tar czf /backup/${volume}_$(date +%Y%m%d_%H%M%S).tar.gz -C /data .
+    done
+
+    echo "Volume backup completed: $BACKUP_DIR"
+    ```
+  </Accordion>
+
+  <Accordion title="Automated Backup">
+    ```bash
+    #!/bin/bash
+    # scripts/automated-backup.sh
+
+    # Add to crontab: 0 2 * * * /path/to/automated-backup.sh
+
+    set -e
+
+    BACKUP_ROOT="/backups"
+    RETENTION_DAYS=30
+
+    # Create timestamped backup directory
+    BACKUP_DIR="$BACKUP_ROOT/$(date +%Y-%m-%d_%H-%M-%S)"
+    mkdir -p $BACKUP_DIR
+
+    # Backup databases
+    ./scripts/backup-database.sh
+
+    # Backup configuration
+    cp -r .env* docker-compose* $BACKUP_DIR/
+
+    # Backup volumes
+    ./scripts/backup-volumes.sh
+
+    # Upload to S3 (optional)
+    if [ -n "$AWS_S3_BUCKET" ]; then
+        aws s3 sync $BACKUP_DIR s3://$AWS_S3_BUCKET/backups/$(basename $BACKUP_DIR)/
+    fi
+
+    # Cleanup old backups
+    find $BACKUP_ROOT -type d -mtime +$RETENTION_DAYS -exec rm -rf {} \;
+
+    echo "Automated backup completed: $BACKUP_DIR"
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### 🔄 Recovery Procedures
+
+<Steps>
+  <Step title="Database Recovery">
+    ```bash
+    # Stop services
+    docker-compose down
+
+    # Restore PostgreSQL
+    docker-compose up -d postgres
+    sleep 10
+    gunzip -c /backups/postgres_backup.sql.gz | docker-compose exec -T postgres psql -U guru guru_db
+
+    # Restore ClickHouse
+    docker-compose up -d clickhouse
+    sleep 15
+    docker-compose exec clickhouse clickhouse-client --query "RESTORE DATABASE analytics FROM Disk('backup', '/backups/clickhouse_backup')"
+
+    # Restore Redis
+    docker-compose stop redis
+    docker cp /backups/redis_backup.rdb $(docker-compose ps -q redis):/data/dump.rdb
+    docker-compose start redis
+    ```
+  </Step>
+  <Step title="Full System Recovery">
+    ```bash
+    # Stop all services
+    docker-compose down -v
+
+    # Restore volumes
+    for backup in /backups/volumes/*.tar.gz; do
+        volume_name=$(basename $backup .tar.gz)
+        docker volume create $volume_name
+        docker run --rm -v $volume_name:/data -v /backups/volumes:/backup alpine \
+            tar xzf /backup/$(basename $backup) -C /data
+    done
+
+    # Restore configuration
+    cp /backups/configuration/.env* ./
+    cp /backups/configuration/docker-compose* ./
+
+    # Start services
+    docker-compose up -d
+    ```
+  </Step>
+</Steps>
+
+## Security Considerations
+
+### 🔒 Production Security
+
+<CardGroup cols={2}>
+  <Card title="Container Security" icon="shield-check">
+    - Run containers as non-root users
+    - Use minimal base images (Alpine)
+    - Scan images for vulnerabilities
+    - Implement resource limits
+  </Card>
+  <Card title="Network Security" icon="network-wired">
+    - Use custom Docker networks
+    - Implement network segmentation
+    - Configure firewall rules
+    - Enable TLS for all communications
+  </Card>
+  <Card title="Secret Management" icon="key">
+    - Use Docker secrets or external vaults
+    - Never commit secrets to images
+    - Rotate secrets regularly
+    - Implement least privilege access
+  </Card>
+  <Card title="Monitoring" icon="chart-line">
+    - Monitor container health
+    - Track resource usage
+    - Implement log aggregation
+    - Set up alerting for anomalies
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Development Setup" icon="code" href="../development/environment">
+    Set up your local development environment
+  </Card>
+  <Card title="Security Guide" icon="shield" href="../security/api-security">
+    Implement comprehensive security measures for production
+  </Card>
+</CardGroup>
+
+<Note>
+  Docker deployment is ideal for development and small to medium production environments. For large-scale deployments, consider migrating to Kubernetes for better orchestration and scaling capabilities.
+</Note>

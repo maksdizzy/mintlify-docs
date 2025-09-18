@@ -1,0 +1,1877 @@
+---
+title: "Testing Guide"
+description: "Comprehensive testing strategies and implementation for the Guru Network Framework"
+icon: "flask"
+---
+
+# Testing Guide
+
+Comprehensive testing strategies to ensure reliability, performance, and maintainability of the Guru Network Framework.
+
+## Testing Strategy
+
+<div style={{minHeight: '600px', height: 'auto', margin: '20px 0', width: '100%', overflow: 'auto'}}>
+<Frame>
+```mermaid
+graph TB
+    subgraph "🧪 Testing Pyramid"
+        E2E[E2E Tests<br/>10%<br/>User Journeys]
+        INT[Integration Tests<br/>20%<br/>API & Services]
+        UNIT[Unit Tests<br/>70%<br/>Components & Functions]
+    end
+
+    subgraph "📊 Test Types"
+        FT[Functional Tests]
+        PT[Performance Tests]
+        ST[Security Tests]
+        CT[Contract Tests]
+    end
+
+    subgraph "🛠️ Tools & Frameworks"
+        JEST[Jest/Vitest<br/>Unit Tests]
+        PW[Playwright<br/>E2E Tests]
+        PY[PyTest<br/>Python Tests]
+        TC[TestContainers<br/>Integration]
+    end
+
+    UNIT --> FT
+    INT --> CT
+    E2E --> PT
+
+    FT --> JEST
+    CT --> TC
+    PT --> PW
+    ST --> PY
+
+    style UNIT fill:#10B981
+    style INT fill:#3B82F6
+    style E2E fill:#F59E0B
+```
+</Frame>
+</div>
+
+## Frontend Testing
+
+### 🎨 Component Testing with Jest/Vitest
+
+<Tabs>
+  <Tab title="Setup & Configuration">
+    ```typescript vitest.config.ts
+    import { defineConfig } from 'vitest/config'
+    import react from '@vitejs/plugin-react'
+    import path from 'path'
+
+    export default defineConfig({
+      plugins: [react()],
+      test: {
+        globals: true,
+        environment: 'jsdom',
+        setupFiles: ['./src/test/setup.ts'],
+        coverage: {
+          reporter: ['text', 'json', 'html'],
+          exclude: [
+            'node_modules/',
+            'src/test/',
+            '**/*.d.ts',
+            '**/*.config.*'
+          ],
+          thresholds: {
+            global: {
+              branches: 80,
+              functions: 80,
+              lines: 80,
+              statements: 80
+            }
+          }
+        }
+      },
+      resolve: {
+        alias: {
+          '@': path.resolve(__dirname, './src'),
+          '@/test': path.resolve(__dirname, './src/test')
+        }
+      }
+    })
+    ```
+
+    ```typescript src/test/setup.ts
+    import '@testing-library/jest-dom'
+    import { beforeAll, afterEach, afterAll } from 'vitest'
+    import { cleanup } from '@testing-library/react'
+    import { server } from './mocks/server'
+
+    // Start server before all tests
+    beforeAll(() => server.listen({ onUnhandledRequest: 'error' }))
+
+    // Reset any request handlers that we may add during the tests
+    afterEach(() => {
+      server.resetHandlers()
+      cleanup()
+    })
+
+    // Clean up after the tests are finished
+    afterAll(() => server.close())
+
+    // Mock next/router
+    vi.mock('next/router', () => ({
+      useRouter: () => ({
+        push: vi.fn(),
+        query: {},
+        pathname: '/',
+        asPath: '/'
+      })
+    }))
+    ```
+  </Tab>
+  <Tab title="Component Tests">
+    ```typescript src/components/WorkflowCard.test.tsx
+    import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+    import { describe, it, expect, vi } from 'vitest'
+    import { WorkflowCard } from '@/components/WorkflowCard'
+    import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+
+    const mockWorkflow = {
+      id: 'workflow-123',
+      name: 'Test Workflow',
+      description: 'A test workflow',
+      status: 'active',
+      created_at: '2024-01-15T10:30:00Z',
+      user_id: 'user-123'
+    }
+
+    const renderWithProvider = (component: React.ReactElement) => {
+      const queryClient = new QueryClient({
+        defaultOptions: {
+          queries: { retry: false },
+          mutations: { retry: false }
+        }
+      })
+
+      return render(
+        <QueryClientProvider client={queryClient}>
+          {component}
+        </QueryClientProvider>
+      )
+    }
+
+    describe('WorkflowCard', () => {
+      it('renders workflow information correctly', () => {
+        renderWithProvider(<WorkflowCard workflow={mockWorkflow} />)
+
+        expect(screen.getByText('Test Workflow')).toBeInTheDocument()
+        expect(screen.getByText('A test workflow')).toBeInTheDocument()
+        expect(screen.getByText('active')).toBeInTheDocument()
+      })
+
+      it('handles delete action with confirmation', async () => {
+        const onDelete = vi.fn()
+        renderWithProvider(
+          <WorkflowCard workflow={mockWorkflow} onDelete={onDelete} />
+        )
+
+        // Click delete button
+        fireEvent.click(screen.getByLabelText('Delete workflow'))
+
+        // Confirm deletion in modal
+        fireEvent.click(screen.getByText('Confirm'))
+
+        await waitFor(() => {
+          expect(onDelete).toHaveBeenCalledWith(mockWorkflow.id)
+        })
+      })
+
+      it('shows loading state during operations', async () => {
+        renderWithProvider(<WorkflowCard workflow={mockWorkflow} isLoading />)
+
+        expect(screen.getByTestId('loading-spinner')).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: /delete/i })).toBeDisabled()
+      })
+
+      it('handles error states gracefully', () => {
+        const workflowWithError = { ...mockWorkflow, status: 'error' }
+        renderWithProvider(<WorkflowCard workflow={workflowWithError} />)
+
+        expect(screen.getByText('error')).toHaveClass('text-red-600')
+        expect(screen.getByLabelText('Error icon')).toBeInTheDocument()
+      })
+    })
+    ```
+  </Tab>
+  <Tab title="Hook Testing">
+    ```typescript src/hooks/useWorkflows.test.ts
+    import { renderHook, waitFor } from '@testing-library/react'
+    import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+    import { describe, it, expect, vi } from 'vitest'
+    import { useWorkflows } from '@/hooks/useWorkflows'
+    import { server } from '@/test/mocks/server'
+    import { http, HttpResponse } from 'msw'
+
+    const createWrapper = () => {
+      const queryClient = new QueryClient({
+        defaultOptions: {
+          queries: { retry: false },
+          mutations: { retry: false }
+        }
+      })
+
+      return ({ children }: { children: React.ReactNode }) => (
+        <QueryClientProvider client={queryClient}>
+          {children}
+        </QueryClientProvider>
+      )
+    }
+
+    describe('useWorkflows', () => {
+      it('fetches workflows successfully', async () => {
+        const mockWorkflows = [
+          { id: '1', name: 'Workflow 1', status: 'active' },
+          { id: '2', name: 'Workflow 2', status: 'inactive' }
+        ]
+
+        server.use(
+          http.get('/api/workflows', () => {
+            return HttpResponse.json({ data: mockWorkflows })
+          })
+        )
+
+        const { result } = renderHook(() => useWorkflows(), {
+          wrapper: createWrapper()
+        })
+
+        await waitFor(() => {
+          expect(result.current.isSuccess).toBe(true)
+        })
+
+        expect(result.current.data).toEqual(mockWorkflows)
+        expect(result.current.isLoading).toBe(false)
+      })
+
+      it('handles API errors properly', async () => {
+        server.use(
+          http.get('/api/workflows', () => {
+            return new HttpResponse(null, { status: 500 })
+          })
+        )
+
+        const { result } = renderHook(() => useWorkflows(), {
+          wrapper: createWrapper()
+        })
+
+        await waitFor(() => {
+          expect(result.current.isError).toBe(true)
+        })
+
+        expect(result.current.error).toBeDefined()
+        expect(result.current.data).toBeUndefined()
+      })
+
+      it('creates workflow with optimistic updates', async () => {
+        const newWorkflow = { name: 'New Workflow', description: 'Test' }
+
+        server.use(
+          http.post('/api/workflows', () => {
+            return HttpResponse.json({
+              data: { id: '3', ...newWorkflow, status: 'active' }
+            })
+          })
+        )
+
+        const { result } = renderHook(() => useWorkflows(), {
+          wrapper: createWrapper()
+        })
+
+        await waitFor(() => {
+          expect(result.current.isSuccess).toBe(true)
+        })
+
+        // Create new workflow
+        result.current.createWorkflow.mutate(newWorkflow)
+
+        await waitFor(() => {
+          expect(result.current.createWorkflow.isSuccess).toBe(true)
+        })
+      })
+    })
+    ```
+  </Tab>
+</Tabs>
+
+### 🎭 E2E Testing with Playwright
+
+<CodeGroup>
+```typescript playwright.config.ts
+import { defineConfig, devices } from '@playwright/test'
+
+export default defineConfig({
+  testDir: './e2e',
+  timeout: 30 * 1000,
+  expect: {
+    timeout: 5000
+  },
+  fullyParallel: true,
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 2 : 0,
+  workers: process.env.CI ? 1 : undefined,
+  reporter: [
+    ['html'],
+    ['json', { outputFile: 'test-results/results.json' }],
+    ['junit', { outputFile: 'test-results/results.xml' }]
+  ],
+  use: {
+    baseURL: 'http://localhost:3000',
+    trace: 'on-first-retry',
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure'
+  },
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] }
+    },
+    {
+      name: 'firefox',
+      use: { ...devices['Desktop Firefox'] }
+    },
+    {
+      name: 'webkit',
+      use: { ...devices['Desktop Safari'] }
+    },
+    {
+      name: 'Mobile Chrome',
+      use: { ...devices['Pixel 5'] }
+    }
+  ],
+  webServer: {
+    command: 'npm run dev',
+    port: 3000,
+    reuseExistingServer: !process.env.CI
+  }
+})
+```
+
+```typescript e2e/workflow-management.spec.ts
+import { test, expect } from '@playwright/test'
+
+test.describe('Workflow Management', () => {
+  test.beforeEach(async ({ page }) => {
+    // Login before each test
+    await page.goto('/login')
+    await page.fill('[data-testid="email"]', 'test@example.com')
+    await page.fill('[data-testid="password"]', 'TestPassword123!')
+    await page.click('[data-testid="login-button"]')
+    await expect(page).toHaveURL('/dashboard')
+  })
+
+  test('should create a new workflow', async ({ page }) => {
+    // Navigate to workflows page
+    await page.click('[data-testid="workflows-nav"]')
+    await expect(page).toHaveURL('/workflows')
+
+    // Open create workflow modal
+    await page.click('[data-testid="create-workflow-button"]')
+    await expect(page.locator('[data-testid="workflow-modal"]')).toBeVisible()
+
+    // Fill workflow form
+    await page.fill('[data-testid="workflow-name"]', 'E2E Test Workflow')
+    await page.fill('[data-testid="workflow-description"]', 'Created by E2E test')
+    await page.selectOption('[data-testid="workflow-category"]', 'trading')
+
+    // Submit form
+    await page.click('[data-testid="create-workflow-submit"]')
+
+    // Verify workflow was created
+    await expect(page.locator('[data-testid="success-toast"]')).toBeVisible()
+    await expect(page.locator('text=E2E Test Workflow')).toBeVisible()
+  })
+
+  test('should edit existing workflow', async ({ page }) => {
+    await page.goto('/workflows')
+
+    // Click edit on first workflow
+    await page.click('[data-testid="workflow-card"]:first-child [data-testid="edit-button"]')
+
+    // Update workflow name
+    await page.fill('[data-testid="workflow-name"]', 'Updated Workflow Name')
+    await page.click('[data-testid="save-workflow"]')
+
+    // Verify update
+    await expect(page.locator('[data-testid="success-toast"]')).toBeVisible()
+    await expect(page.locator('text=Updated Workflow Name')).toBeVisible()
+  })
+
+  test('should delete workflow with confirmation', async ({ page }) => {
+    await page.goto('/workflows')
+
+    // Count initial workflows
+    const initialCount = await page.locator('[data-testid="workflow-card"]').count()
+
+    // Click delete on first workflow
+    await page.click('[data-testid="workflow-card"]:first-child [data-testid="delete-button"]')
+
+    // Confirm deletion
+    await expect(page.locator('[data-testid="confirm-dialog"]')).toBeVisible()
+    await page.click('[data-testid="confirm-delete"]')
+
+    // Verify deletion
+    await expect(page.locator('[data-testid="success-toast"]')).toBeVisible()
+    await expect(page.locator('[data-testid="workflow-card"]')).toHaveCount(initialCount - 1)
+  })
+
+  test('should filter workflows by category', async ({ page }) => {
+    await page.goto('/workflows')
+
+    // Apply trading filter
+    await page.click('[data-testid="filter-trading"]')
+
+    // Verify only trading workflows are shown
+    const workflows = page.locator('[data-testid="workflow-card"]')
+    const count = await workflows.count()
+
+    for (let i = 0; i < count; i++) {
+      const category = await workflows.nth(i).locator('[data-testid="workflow-category"]').textContent()
+      expect(category).toBe('trading')
+    }
+  })
+
+  test('should search workflows by name', async ({ page }) => {
+    await page.goto('/workflows')
+
+    // Search for specific workflow
+    await page.fill('[data-testid="search-input"]', 'Bitcoin')
+
+    // Verify search results
+    await expect(page.locator('[data-testid="workflow-card"]')).toContainText('Bitcoin')
+  })
+})
+```
+</CodeGroup>
+
+## Backend Testing
+
+### 🐍 Python Testing with PyTest
+
+<Tabs>
+  <Tab title="Test Configuration">
+    ```python pyproject.toml
+    [tool.pytest.ini_options]
+    testpaths = ["tests"]
+    python_files = ["test_*.py", "*_test.py"]
+    python_classes = ["Test*"]
+    python_functions = ["test_*"]
+    addopts = [
+        "-ra",
+        "--strict-markers",
+        "--strict-config",
+        "--cov=src",
+        "--cov-report=term-missing",
+        "--cov-report=html",
+        "--cov-report=xml",
+        "--cov-fail-under=80"
+    ]
+    markers = [
+        "unit: Unit tests",
+        "integration: Integration tests",
+        "slow: Slow tests",
+        "external: Tests requiring external services"
+    ]
+    ```
+
+    ```python conftest.py
+    import pytest
+    import asyncio
+    from httpx import AsyncClient
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+    from sqlalchemy.orm import sessionmaker
+    from testcontainers.postgres import PostgresContainer
+
+    from src.main import app
+    from src.database import get_db, Base
+    from src.auth import create_access_token
+
+    @pytest.fixture(scope="session")
+    def event_loop():
+        """Create an instance of the default event loop for the test session."""
+        loop = asyncio.get_event_loop_policy().new_event_loop()
+        yield loop
+        loop.close()
+
+    @pytest.fixture(scope="session")
+    async def postgres_container():
+        with PostgresContainer("postgres:15") as postgres:
+            yield postgres
+
+    @pytest.fixture(scope="session")
+    async def test_db(postgres_container):
+        engine = create_async_engine(
+            postgres_container.get_connection_url().replace("postgresql://", "postgresql+asyncpg://"),
+            echo=False
+        )
+
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
+        TestingSessionLocal = sessionmaker(
+            engine, class_=AsyncSession, expire_on_commit=False
+        )
+
+        yield TestingSessionLocal
+
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+
+    @pytest.fixture
+    async def db_session(test_db):
+        async with test_db() as session:
+            yield session
+
+    @pytest.fixture
+    async def client(db_session):
+        def override_get_db():
+            yield db_session
+
+        app.dependency_overrides[get_db] = override_get_db
+
+        async with AsyncClient(app=app, base_url="http://test") as client:
+            yield client
+
+        app.dependency_overrides.clear()
+
+    @pytest.fixture
+    def test_user():
+        return {
+            "id": "user-123",
+            "username": "testuser",
+            "email": "test@example.com",
+            "role": "user"
+        }
+
+    @pytest.fixture
+    def auth_headers(test_user):
+        token = create_access_token(test_user["id"], test_user["role"])
+        return {"Authorization": f"Bearer {token}"}
+    ```
+  </Tab>
+  <Tab title="Service Tests">
+    ```python tests/test_workflow_service.py
+    import pytest
+    from unittest.mock import AsyncMock, Mock
+    from src.services.workflow_service import WorkflowService
+    from src.models.workflow import Workflow
+    from src.schemas.workflow import WorkflowCreate
+
+    @pytest.fixture
+    def mock_repository():
+        return AsyncMock()
+
+    @pytest.fixture
+    def workflow_service(mock_repository):
+        return WorkflowService(repository=mock_repository)
+
+    @pytest.mark.unit
+    class TestWorkflowService:
+
+        @pytest.mark.asyncio
+        async def test_create_workflow_success(self, workflow_service, mock_repository, test_user):
+            # Arrange
+            workflow_data = WorkflowCreate(
+                name="Test Workflow",
+                description="Test description",
+                category="trading"
+            )
+
+            expected_workflow = Workflow(
+                id="workflow-123",
+                name=workflow_data.name,
+                description=workflow_data.description,
+                user_id=test_user["id"]
+            )
+
+            mock_repository.create.return_value = expected_workflow
+
+            # Act
+            result = await workflow_service.create(workflow_data, test_user)
+
+            # Assert
+            assert result.name == workflow_data.name
+            assert result.user_id == test_user["id"]
+            mock_repository.create.assert_called_once()
+
+        @pytest.mark.asyncio
+        async def test_create_workflow_duplicate_name(self, workflow_service, mock_repository, test_user):
+            # Arrange
+            workflow_data = WorkflowCreate(
+                name="Existing Workflow",
+                category="trading"
+            )
+
+            mock_repository.get_by_name_and_user.return_value = Mock()  # Existing workflow
+
+            # Act & Assert
+            with pytest.raises(ValueError, match="Workflow with this name already exists"):
+                await workflow_service.create(workflow_data, test_user)
+
+        @pytest.mark.asyncio
+        async def test_get_user_workflows(self, workflow_service, mock_repository, test_user):
+            # Arrange
+            expected_workflows = [
+                Workflow(id="1", name="Workflow 1", user_id=test_user["id"]),
+                Workflow(id="2", name="Workflow 2", user_id=test_user["id"])
+            ]
+
+            mock_repository.get_by_user.return_value = expected_workflows
+
+            # Act
+            result = await workflow_service.get_user_workflows(test_user["id"])
+
+            # Assert
+            assert len(result) == 2
+            assert all(w.user_id == test_user["id"] for w in result)
+            mock_repository.get_by_user.assert_called_once_with(test_user["id"])
+
+        @pytest.mark.asyncio
+        async def test_delete_workflow_unauthorized(self, workflow_service, mock_repository, test_user):
+            # Arrange
+            workflow = Workflow(id="workflow-123", user_id="other-user")
+            mock_repository.get_by_id.return_value = workflow
+
+            # Act & Assert
+            with pytest.raises(PermissionError, match="Not authorized to delete this workflow"):
+                await workflow_service.delete("workflow-123", test_user)
+    ```
+  </Tab>
+  <Tab title="API Tests">
+    ```python tests/test_workflow_api.py
+    import pytest
+    from httpx import AsyncClient
+
+    @pytest.mark.integration
+    class TestWorkflowAPI:
+
+        @pytest.mark.asyncio
+        async def test_create_workflow_success(self, client: AsyncClient, auth_headers, db_session):
+            # Arrange
+            workflow_data = {
+                "name": "API Test Workflow",
+                "description": "Created via API test",
+                "category": "trading"
+            }
+
+            # Act
+            response = await client.post(
+                "/api/v1/workflows",
+                json=workflow_data,
+                headers=auth_headers
+            )
+
+            # Assert
+            assert response.status_code == 201
+            data = response.json()
+            assert data["success"] is True
+            assert data["data"]["name"] == workflow_data["name"]
+
+            # Verify in database
+            from src.models.workflow import Workflow
+            workflow = await db_session.get(Workflow, data["data"]["id"])
+            assert workflow is not None
+            assert workflow.name == workflow_data["name"]
+
+        @pytest.mark.asyncio
+        async def test_create_workflow_validation_error(self, client: AsyncClient, auth_headers):
+            # Arrange
+            invalid_data = {
+                "name": "A",  # Too short
+                "category": "invalid"  # Invalid category
+            }
+
+            # Act
+            response = await client.post(
+                "/api/v1/workflows",
+                json=invalid_data,
+                headers=auth_headers
+            )
+
+            # Assert
+            assert response.status_code == 422
+            data = response.json()
+            assert data["success"] is False
+            assert "validation" in data["message"].lower()
+
+        @pytest.mark.asyncio
+        async def test_get_workflows_pagination(self, client: AsyncClient, auth_headers, db_session):
+            # Arrange - Create test workflows
+            from src.models.workflow import Workflow
+            workflows = []
+            for i in range(25):
+                workflow = Workflow(
+                    name=f"Test Workflow {i}",
+                    user_id="user-123",
+                    category="trading"
+                )
+                db_session.add(workflow)
+                workflows.append(workflow)
+
+            await db_session.commit()
+
+            # Act - Get first page
+            response = await client.get(
+                "/api/v1/workflows?page=1&per_page=10",
+                headers=auth_headers
+            )
+
+            # Assert
+            assert response.status_code == 200
+            data = response.json()
+            assert len(data["data"]) == 10
+            assert data["pagination"]["page"] == 1
+            assert data["pagination"]["total"] == 25
+            assert data["pagination"]["pages"] == 3
+
+        @pytest.mark.asyncio
+        async def test_unauthorized_access(self, client: AsyncClient):
+            # Act
+            response = await client.get("/api/v1/workflows")
+
+            # Assert
+            assert response.status_code == 401
+
+        @pytest.mark.asyncio
+        async def test_workflow_not_found(self, client: AsyncClient, auth_headers):
+            # Act
+            response = await client.get(
+                "/api/v1/workflows/nonexistent-id",
+                headers=auth_headers
+            )
+
+            # Assert
+            assert response.status_code == 404
+    ```
+  </Tab>
+</Tabs>
+
+### ☕ Java Testing with JUnit 5
+
+<CodeGroup>
+```java src/test/java/io/guru/engine/service/WorkflowServiceTest.java
+package io.guru.engine.service;
+
+import io.guru.engine.model.Workflow;
+import io.guru.engine.repository.WorkflowRepository;
+import io.guru.engine.exception.WorkflowNotFoundException;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+@DisplayName("Workflow Service Tests")
+class WorkflowServiceTest {
+
+    @Mock
+    private WorkflowRepository workflowRepository;
+
+    @InjectMocks
+    private WorkflowService workflowService;
+
+    private Workflow testWorkflow;
+    private UUID workflowId;
+
+    @BeforeEach
+    void setUp() {
+        workflowId = UUID.randomUUID();
+        testWorkflow = Workflow.builder()
+                .id(workflowId)
+                .name("Test Workflow")
+                .description("Test Description")
+                .userId("user-123")
+                .status("ACTIVE")
+                .build();
+    }
+
+    @Nested
+    @DisplayName("Create Workflow Tests")
+    class CreateWorkflowTests {
+
+        @Test
+        @DisplayName("Should create workflow successfully")
+        void shouldCreateWorkflowSuccessfully() {
+            // Given
+            when(workflowRepository.save(any(Workflow.class))).thenReturn(testWorkflow);
+
+            // When
+            Workflow result = workflowService.createWorkflow(
+                "Test Workflow",
+                "Test Description",
+                "user-123"
+            );
+
+            // Then
+            assertThat(result).isNotNull();
+            assertThat(result.getName()).isEqualTo("Test Workflow");
+            assertThat(result.getUserId()).isEqualTo("user-123");
+            verify(workflowRepository).save(any(Workflow.class));
+        }
+
+        @Test
+        @DisplayName("Should throw exception when name is blank")
+        void shouldThrowExceptionWhenNameIsBlank() {
+            // When & Then
+            assertThatThrownBy(() -> workflowService.createWorkflow("", "Description", "user-123"))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("Workflow name cannot be blank");
+        }
+    }
+
+    @Nested
+    @DisplayName("Get Workflow Tests")
+    class GetWorkflowTests {
+
+        @Test
+        @DisplayName("Should return workflow when found")
+        void shouldReturnWorkflowWhenFound() {
+            // Given
+            when(workflowRepository.findById(workflowId)).thenReturn(Optional.of(testWorkflow));
+
+            // When
+            Workflow result = workflowService.getWorkflowById(workflowId);
+
+            // Then
+            assertThat(result).isEqualTo(testWorkflow);
+            verify(workflowRepository).findById(workflowId);
+        }
+
+        @Test
+        @DisplayName("Should throw exception when workflow not found")
+        void shouldThrowExceptionWhenWorkflowNotFound() {
+            // Given
+            when(workflowRepository.findById(workflowId)).thenReturn(Optional.empty());
+
+            // When & Then
+            assertThatThrownBy(() -> workflowService.getWorkflowById(workflowId))
+                    .isInstanceOf(WorkflowNotFoundException.class)
+                    .hasMessageContaining(workflowId.toString());
+        }
+    }
+
+    @Nested
+    @DisplayName("List Workflows Tests")
+    class ListWorkflowsTests {
+
+        @Test
+        @DisplayName("Should return paginated workflows for user")
+        void shouldReturnPaginatedWorkflowsForUser() {
+            // Given
+            List<Workflow> workflows = List.of(testWorkflow);
+            Page<Workflow> page = new PageImpl<>(workflows);
+            when(workflowRepository.findByUserId(eq("user-123"), any(Pageable.class)))
+                    .thenReturn(page);
+
+            // When
+            Page<Workflow> result = workflowService.getUserWorkflows("user-123", Pageable.unpaged());
+
+            // Then
+            assertThat(result.getContent()).hasSize(1);
+            assertThat(result.getContent().get(0)).isEqualTo(testWorkflow);
+        }
+    }
+}
+```
+
+```java src/test/java/io/guru/engine/integration/WorkflowIntegrationTest.java
+package io.guru.engine.integration;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.guru.engine.EngineApplication;
+import io.guru.engine.model.Workflow;
+import io.guru.engine.repository.WorkflowRepository;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureWebMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.util.TestPropertyValues;
+import org.springframework.context.ApplicationContextInitializer;
+import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.ContextConfiguration;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Transactional;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+@SpringBootTest(classes = EngineApplication.class)
+@AutoConfigureWebMvc
+@Testcontainers
+@ContextConfiguration(initializers = {WorkflowIntegrationTest.Initializer.class})
+@Transactional
+class WorkflowIntegrationTest {
+
+    @Container
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15")
+            .withDatabaseName("testdb")
+            .withUsername("test")
+            .withPassword("test");
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @Autowired
+    private WorkflowRepository workflowRepository;
+
+    static class Initializer implements ApplicationContextInitializer<ConfigurableApplicationContext> {
+        public void initialize(ConfigurableApplicationContext configurableApplicationContext) {
+            TestPropertyValues.of(
+                    "spring.datasource.url=" + postgres.getJdbcUrl(),
+                    "spring.datasource.username=" + postgres.getUsername(),
+                    "spring.datasource.password=" + postgres.getPassword()
+            ).applyTo(configurableApplicationContext.getEnvironment());
+        }
+    }
+
+    @Test
+    void shouldCreateWorkflowSuccessfully() throws Exception {
+        // Given
+        var createRequest = """
+                {
+                    "name": "Integration Test Workflow",
+                    "description": "Created in integration test",
+                    "userId": "user-123"
+                }
+                """;
+
+        // When & Then
+        mockMvc.perform(post("/api/workflows")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createRequest))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.name").value("Integration Test Workflow"))
+                .andExpect(jsonPath("$.userId").value("user-123"));
+    }
+
+    @Test
+    void shouldGetWorkflowById() throws Exception {
+        // Given
+        Workflow workflow = workflowRepository.save(
+                Workflow.builder()
+                        .name("Test Workflow")
+                        .description("Test")
+                        .userId("user-123")
+                        .status("ACTIVE")
+                        .build()
+        );
+
+        // When & Then
+        mockMvc.perform(get("/api/workflows/{id}", workflow.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Test Workflow"))
+                .andExpect(jsonPath("$.id").value(workflow.getId().toString()));
+    }
+
+    @Test
+    void shouldReturnNotFoundForNonexistentWorkflow() throws Exception {
+        mockMvc.perform(get("/api/workflows/{id}", "00000000-0000-0000-0000-000000000000"))
+                .andExpect(status().isNotFound());
+    }
+}
+```
+</CodeGroup>
+
+## Performance Testing
+
+### 🚀 Load Testing with k6
+
+<Tabs>
+  <Tab title="Basic Load Test">
+    ```javascript load-test.js
+    import http from 'k6/http';
+    import { check, sleep } from 'k6';
+    import { Rate, Trend } from 'k6/metrics';
+
+    // Custom metrics
+    export let errorRate = new Rate('errors');
+    export let responseTime = new Trend('response_time');
+
+    // Test configuration
+    export let options = {
+      stages: [
+        { duration: '2m', target: 10 },   // Ramp up to 10 users
+        { duration: '5m', target: 10 },   // Stay at 10 users
+        { duration: '2m', target: 20 },   // Ramp up to 20 users
+        { duration: '5m', target: 20 },   // Stay at 20 users
+        { duration: '2m', target: 0 },    // Ramp down to 0 users
+      ],
+      thresholds: {
+        http_req_duration: ['p(95)<500'], // 95% of requests must complete below 500ms
+        http_req_failed: ['rate<0.1'],    // Error rate must be below 10%
+        errors: ['rate<0.1'],
+      },
+    };
+
+    const BASE_URL = 'http://localhost:8000';
+
+    // Test data
+    const users = [
+      { email: 'user1@test.com', password: 'TestPassword123!' },
+      { email: 'user2@test.com', password: 'TestPassword123!' },
+      { email: 'user3@test.com', password: 'TestPassword123!' },
+    ];
+
+    export function setup() {
+      // Setup test data if needed
+      console.log('Setting up load test...');
+    }
+
+    export default function () {
+      // Login
+      const user = users[Math.floor(Math.random() * users.length)];
+
+      let loginResponse = http.post(`${BASE_URL}/api/auth/login`, {
+        email: user.email,
+        password: user.password,
+      }, {
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      let loginSuccess = check(loginResponse, {
+        'login successful': (r) => r.status === 200,
+        'login response time OK': (r) => r.timings.duration < 200,
+      });
+
+      errorRate.add(!loginSuccess);
+      responseTime.add(loginResponse.timings.duration);
+
+      if (loginSuccess) {
+        const token = JSON.parse(loginResponse.body).access_token;
+        const authHeaders = {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        };
+
+        // Get workflows
+        let workflowsResponse = http.get(`${BASE_URL}/api/workflows`, {
+          headers: authHeaders,
+        });
+
+        let workflowsSuccess = check(workflowsResponse, {
+          'workflows fetched successfully': (r) => r.status === 200,
+          'workflows response time OK': (r) => r.timings.duration < 300,
+        });
+
+        errorRate.add(!workflowsSuccess);
+        responseTime.add(workflowsResponse.timings.duration);
+
+        // Create workflow (10% of the time)
+        if (Math.random() < 0.1) {
+          let createResponse = http.post(`${BASE_URL}/api/workflows`, JSON.stringify({
+            name: `Load Test Workflow ${Date.now()}`,
+            description: 'Created during load test',
+            category: 'trading',
+          }), {
+            headers: authHeaders,
+          });
+
+          let createSuccess = check(createResponse, {
+            'workflow created successfully': (r) => r.status === 201,
+            'create response time OK': (r) => r.timings.duration < 500,
+          });
+
+          errorRate.add(!createSuccess);
+          responseTime.add(createResponse.timings.duration);
+        }
+      }
+
+      sleep(1);
+    }
+
+    export function teardown(data) {
+      console.log('Tearing down load test...');
+    }
+    ```
+  </Tab>
+  <Tab title="Stress Test">
+    ```javascript stress-test.js
+    import http from 'k6/http';
+    import { check, sleep } from 'k6';
+
+    export let options = {
+      stages: [
+        { duration: '10m', target: 100 }, // Ramp up to 100 users over 10 minutes
+        { duration: '30m', target: 100 }, // Stay at 100 users for 30 minutes
+        { duration: '5m', target: 200 },  // Spike to 200 users
+        { duration: '5m', target: 200 },  // Stay at 200 users
+        { duration: '10m', target: 0 },   // Ramp down
+      ],
+      thresholds: {
+        http_req_duration: ['p(99)<2000'], // 99% of requests must complete below 2s
+        http_req_failed: ['rate<0.05'],    // Error rate must be below 5%
+      },
+    };
+
+    const BASE_URL = 'http://localhost:8000';
+
+    export default function () {
+      // Simulate heavy API usage
+      const endpoints = [
+        '/api/workflows',
+        '/api/strategies',
+        '/api/executions',
+        '/api/analytics/summary',
+      ];
+
+      const endpoint = endpoints[Math.floor(Math.random() * endpoints.length)];
+
+      let response = http.get(`${BASE_URL}${endpoint}`, {
+        headers: {
+          'Authorization': 'Bearer test-token',
+        },
+      });
+
+      check(response, {
+        'status is 200 or 401': (r) => [200, 401].includes(r.status),
+        'response time < 2000ms': (r) => r.timings.duration < 2000,
+      });
+
+      sleep(Math.random() * 3 + 1); // Random sleep between 1-4 seconds
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### 📊 Database Performance Testing
+
+<CodeGroup>
+```python tests/performance/test_db_performance.py
+import pytest
+import asyncio
+import time
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
+from src.models.workflow import Workflow
+from src.models.user import User
+
+@pytest.mark.performance
+class TestDatabasePerformance:
+
+    @pytest.mark.asyncio
+    async def test_bulk_insert_performance(self, db_session: AsyncSession):
+        """Test bulk insert performance"""
+        start_time = time.time()
+
+        # Create 1000 workflows
+        workflows = []
+        for i in range(1000):
+            workflow = Workflow(
+                name=f"Performance Test Workflow {i}",
+                description=f"Description {i}",
+                user_id="user-123",
+                category="trading"
+            )
+            workflows.append(workflow)
+
+        db_session.add_all(workflows)
+        await db_session.commit()
+
+        end_time = time.time()
+        duration = end_time - start_time
+
+        # Should complete within 5 seconds
+        assert duration < 5.0, f"Bulk insert took {duration:.2f}s, expected < 5s"
+        print(f"Bulk insert of 1000 records: {duration:.2f}s")
+
+    @pytest.mark.asyncio
+    async def test_query_performance_with_joins(self, db_session: AsyncSession):
+        """Test complex query performance"""
+        # Setup test data
+        user = User(id="user-123", username="testuser", email="test@example.com")
+        db_session.add(user)
+
+        workflows = []
+        for i in range(100):
+            workflow = Workflow(
+                name=f"Workflow {i}",
+                user_id="user-123",
+                category="trading"
+            )
+            workflows.append(workflow)
+
+        db_session.add_all(workflows)
+        await db_session.commit()
+
+        # Test query performance
+        start_time = time.time()
+
+        query = text("""
+            SELECT w.*, u.username
+            FROM workflows w
+            JOIN users u ON w.user_id = u.id
+            WHERE w.category = :category
+            ORDER BY w.created_at DESC
+            LIMIT 50
+        """)
+
+        result = await db_session.execute(query, {"category": "trading"})
+        rows = result.fetchall()
+
+        end_time = time.time()
+        duration = end_time - start_time
+
+        assert len(rows) <= 50
+        assert duration < 0.1, f"Complex query took {duration:.3f}s, expected < 0.1s"
+        print(f"Complex query with join: {duration:.3f}s")
+
+    @pytest.mark.asyncio
+    async def test_concurrent_operations(self, db_session: AsyncSession):
+        """Test concurrent database operations"""
+        async def create_workflow(session, index):
+            workflow = Workflow(
+                name=f"Concurrent Workflow {index}",
+                user_id="user-123",
+                category="trading"
+            )
+            session.add(workflow)
+            await session.commit()
+
+        start_time = time.time()
+
+        # Run 50 concurrent operations
+        tasks = []
+        for i in range(50):
+            task = create_workflow(db_session, i)
+            tasks.append(task)
+
+        await asyncio.gather(*tasks)
+
+        end_time = time.time()
+        duration = end_time - start_time
+
+        # Should handle concurrent operations efficiently
+        assert duration < 3.0, f"Concurrent operations took {duration:.2f}s, expected < 3s"
+        print(f"50 concurrent operations: {duration:.2f}s")
+```
+
+```bash performance-test.sh
+#!/bin/bash
+
+echo "🚀 Running Performance Tests..."
+
+# Database performance tests
+echo "📊 Database Performance Tests"
+poetry run pytest tests/performance/test_db_performance.py -v -m performance
+
+# API load tests with k6
+echo "🌐 API Load Tests"
+k6 run --out json=results/load-test-results.json tests/load/load-test.js
+
+# Memory leak detection
+echo "🧠 Memory Leak Detection"
+poetry run python -m memory_profiler tests/performance/memory_test.py
+
+# Generate performance report
+echo "📈 Generating Performance Report"
+python scripts/generate_performance_report.py
+
+echo "✅ Performance tests completed!"
+```
+</CodeGroup>
+
+## Test Automation & CI/CD
+
+### 🔄 GitHub Actions Workflow
+
+<CodeGroup>
+```yaml .github/workflows/test.yml
+name: Test Suite
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  frontend-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'pnpm'
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: cd frontend && pnpm install
+
+      - name: Run linting
+        run: cd frontend && pnpm lint
+
+      - name: Run type checking
+        run: cd frontend && pnpm type-check
+
+      - name: Run unit tests
+        run: cd frontend && pnpm test:unit
+
+      - name: Run E2E tests
+        run: cd frontend && pnpm test:e2e
+        env:
+          CI: true
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: frontend-test-results
+          path: |
+            frontend/coverage/
+            frontend/test-results/
+            frontend/playwright-report/
+
+  backend-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: latest
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Load cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v3
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+
+      - name: Install dependencies
+        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+        run: poetry install --no-interaction --no-root
+
+      - name: Run linting
+        run: |
+          poetry run ruff check .
+          poetry run black --check .
+
+      - name: Run type checking
+        run: poetry run mypy src/
+
+      - name: Run unit tests
+        run: poetry run pytest tests/unit/ -v --cov=src --cov-report=xml
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379/0
+
+      - name: Run integration tests
+        run: poetry run pytest tests/integration/ -v
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379/0
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          flags: backend
+          name: backend-coverage
+
+  java-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Run tests
+        run: cd engine && ./gradlew test integrationTest
+        env:
+          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/test_db
+          SPRING_DATASOURCE_USERNAME: postgres
+          SPRING_DATASOURCE_PASSWORD: postgres
+
+      - name: Generate test report
+        run: cd engine && ./gradlew jacocoTestReport
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: java-test-results
+          path: |
+            engine/build/reports/
+            engine/build/test-results/
+
+  performance-tests:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [frontend-tests, backend-tests, java-tests]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup k6
+        run: |
+          sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6
+
+      - name: Start services
+        run: docker-compose -f docker-compose.test.yml up -d
+
+      - name: Wait for services
+        run: |
+          timeout 60s bash -c 'until curl -f http://localhost:8000/health; do sleep 5; done'
+
+      - name: Run load tests
+        run: k6 run --out json=load-test-results.json tests/load/load-test.js
+
+      - name: Upload performance results
+        uses: actions/upload-artifact@v3
+        with:
+          name: performance-results
+          path: load-test-results.json
+```
+
+```yaml .github/workflows/security-scan.yml
+name: Security Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 2 * * 0' # Weekly scan
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run Bandit security linter for Python
+        run: |
+          pip install bandit
+          bandit -r src/ -f json -o bandit-results.json
+        continue-on-error: true
+
+      - name: Run npm audit for Node.js
+        run: |
+          cd frontend
+          npm audit --audit-level=high --json > npm-audit-results.json
+        continue-on-error: true
+
+      - name: Upload security scan results
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-scan-results
+          path: |
+            trivy-results.sarif
+            bandit-results.json
+            frontend/npm-audit-results.json
+```
+</CodeGroup>
+
+## Test Reporting & Analytics
+
+### 📊 Test Reports
+
+<CodeGroup>
+```python scripts/generate_test_report.py
+#!/usr/bin/env python3
+"""Generate comprehensive test report from various test results."""
+
+import json
+import xml.etree.ElementTree as ET
+from pathlib import Path
+from datetime import datetime
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+class TestReportGenerator:
+    def __init__(self, output_dir: Path = Path("reports")):
+        self.output_dir = output_dir
+        self.output_dir.mkdir(exist_ok=True)
+
+    def generate_report(self):
+        """Generate comprehensive test report."""
+        report_data = {
+            "generated_at": datetime.now().isoformat(),
+            "summary": self._generate_summary(),
+            "coverage": self._analyze_coverage(),
+            "performance": self._analyze_performance(),
+            "trends": self._analyze_trends()
+        }
+
+        # Generate HTML report
+        self._generate_html_report(report_data)
+
+        # Generate charts
+        self._generate_charts(report_data)
+
+        return report_data
+
+    def _generate_summary(self) -> dict:
+        """Generate test execution summary."""
+        junit_files = list(Path(".").glob("**/test-results/**/*.xml"))
+
+        total_tests = 0
+        passed_tests = 0
+        failed_tests = 0
+        skipped_tests = 0
+
+        for junit_file in junit_files:
+            try:
+                tree = ET.parse(junit_file)
+                root = tree.getroot()
+
+                for testsuite in root.findall(".//testsuite"):
+                    tests = int(testsuite.get("tests", 0))
+                    failures = int(testsuite.get("failures", 0))
+                    errors = int(testsuite.get("errors", 0))
+                    skipped = int(testsuite.get("skipped", 0))
+
+                    total_tests += tests
+                    failed_tests += failures + errors
+                    skipped_tests += skipped
+                    passed_tests += tests - failures - errors - skipped
+
+            except Exception as e:
+                print(f"Error parsing {junit_file}: {e}")
+
+        return {
+            "total_tests": total_tests,
+            "passed_tests": passed_tests,
+            "failed_tests": failed_tests,
+            "skipped_tests": skipped_tests,
+            "pass_rate": passed_tests / total_tests * 100 if total_tests > 0 else 0
+        }
+
+    def _analyze_coverage(self) -> dict:
+        """Analyze code coverage data."""
+        coverage_files = list(Path(".").glob("**/coverage.xml"))
+
+        coverage_data = {}
+
+        for coverage_file in coverage_files:
+            try:
+                tree = ET.parse(coverage_file)
+                root = tree.getroot()
+
+                line_rate = float(root.get("line-rate", 0)) * 100
+                branch_rate = float(root.get("branch-rate", 0)) * 100
+
+                service = coverage_file.parent.parent.name
+                coverage_data[service] = {
+                    "line_coverage": line_rate,
+                    "branch_coverage": branch_rate
+                }
+
+            except Exception as e:
+                print(f"Error parsing coverage file {coverage_file}: {e}")
+
+        return coverage_data
+
+    def _analyze_performance(self) -> dict:
+        """Analyze performance test results."""
+        k6_results = list(Path(".").glob("**/*load-test-results.json"))
+
+        performance_data = {}
+
+        for result_file in k6_results:
+            try:
+                with open(result_file) as f:
+                    data = json.load(f)
+
+                metrics = data.get("metrics", {})
+
+                performance_data["load_test"] = {
+                    "avg_response_time": metrics.get("http_req_duration", {}).get("avg", 0),
+                    "p95_response_time": metrics.get("http_req_duration", {}).get("p(95)", 0),
+                    "error_rate": metrics.get("http_req_failed", {}).get("rate", 0) * 100,
+                    "requests_per_second": metrics.get("http_reqs", {}).get("rate", 0)
+                }
+
+            except Exception as e:
+                print(f"Error parsing performance results {result_file}: {e}")
+
+        return performance_data
+
+    def _analyze_trends(self) -> dict:
+        """Analyze test trends over time."""
+        # This would typically read from a database or historical files
+        # For now, return mock trend data
+        return {
+            "pass_rate_trend": [95.2, 96.1, 94.8, 97.3, 96.7],
+            "coverage_trend": [82.1, 83.5, 84.2, 85.0, 85.8],
+            "performance_trend": [245, 238, 251, 229, 235]  # avg response time
+        }
+
+    def _generate_html_report(self, report_data: dict):
+        """Generate HTML test report."""
+        html_template = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Test Report - {generated_at}</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 40px; }}
+                .summary {{ background: #f5f5f5; padding: 20px; border-radius: 5px; }}
+                .metric {{ display: inline-block; margin: 10px; padding: 10px; background: white; border-radius: 3px; }}
+                .pass {{ color: green; }}
+                .fail {{ color: red; }}
+                .coverage {{ margin: 20px 0; }}
+                table {{ border-collapse: collapse; width: 100%; }}
+                th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+                th {{ background-color: #f2f2f2; }}
+            </style>
+        </head>
+        <body>
+            <h1>Test Report</h1>
+            <p>Generated at: {generated_at}</p>
+
+            <div class="summary">
+                <h2>Test Summary</h2>
+                <div class="metric">
+                    <strong>Total Tests:</strong> {total_tests}
+                </div>
+                <div class="metric pass">
+                    <strong>Passed:</strong> {passed_tests}
+                </div>
+                <div class="metric fail">
+                    <strong>Failed:</strong> {failed_tests}
+                </div>
+                <div class="metric">
+                    <strong>Pass Rate:</strong> {pass_rate:.1f}%
+                </div>
+            </div>
+
+            <div class="coverage">
+                <h2>Code Coverage</h2>
+                <table>
+                    <tr>
+                        <th>Service</th>
+                        <th>Line Coverage</th>
+                        <th>Branch Coverage</th>
+                    </tr>
+                    {coverage_rows}
+                </table>
+            </div>
+
+            <div class="performance">
+                <h2>Performance Metrics</h2>
+                {performance_section}
+            </div>
+        </body>
+        </html>
+        """
+
+        # Generate coverage rows
+        coverage_rows = ""
+        for service, data in report_data["coverage"].items():
+            coverage_rows += f"""
+                <tr>
+                    <td>{service}</td>
+                    <td>{data['line_coverage']:.1f}%</td>
+                    <td>{data['branch_coverage']:.1f}%</td>
+                </tr>
+            """
+
+        # Generate performance section
+        perf_data = report_data["performance"].get("load_test", {})
+        performance_section = f"""
+            <p><strong>Average Response Time:</strong> {perf_data.get('avg_response_time', 0):.0f}ms</p>
+            <p><strong>95th Percentile:</strong> {perf_data.get('p95_response_time', 0):.0f}ms</p>
+            <p><strong>Error Rate:</strong> {perf_data.get('error_rate', 0):.1f}%</p>
+        """
+
+        html_content = html_template.format(
+            generated_at=report_data["generated_at"],
+            total_tests=report_data["summary"]["total_tests"],
+            passed_tests=report_data["summary"]["passed_tests"],
+            failed_tests=report_data["summary"]["failed_tests"],
+            pass_rate=report_data["summary"]["pass_rate"],
+            coverage_rows=coverage_rows,
+            performance_section=performance_section
+        )
+
+        with open(self.output_dir / "test-report.html", "w") as f:
+            f.write(html_content)
+
+    def _generate_charts(self, report_data: dict):
+        """Generate test trend charts."""
+        # Test pass rate trend
+        plt.figure(figsize=(10, 6))
+        plt.plot(report_data["trends"]["pass_rate_trend"], marker='o')
+        plt.title("Test Pass Rate Trend")
+        plt.ylabel("Pass Rate (%)")
+        plt.xlabel("Build Number")
+        plt.grid(True)
+        plt.savefig(self.output_dir / "pass-rate-trend.png")
+        plt.close()
+
+        # Coverage trend
+        plt.figure(figsize=(10, 6))
+        plt.plot(report_data["trends"]["coverage_trend"], marker='o', color='green')
+        plt.title("Code Coverage Trend")
+        plt.ylabel("Coverage (%)")
+        plt.xlabel("Build Number")
+        plt.grid(True)
+        plt.savefig(self.output_dir / "coverage-trend.png")
+        plt.close()
+
+if __name__ == "__main__":
+    generator = TestReportGenerator()
+    report = generator.generate_report()
+    print("Test report generated successfully!")
+    print(f"Summary: {report['summary']}")
+```
+
+```bash scripts/run-all-tests.sh
+#!/bin/bash
+set -e
+
+echo "🧪 Running Complete Test Suite..."
+
+# Create results directory
+mkdir -p test-results
+
+# Frontend Tests
+echo "🎨 Running Frontend Tests..."
+cd frontend
+pnpm test:unit --reporter=junit --outputFile=../test-results/frontend-unit.xml
+pnpm test:e2e --reporter=junit --outputFile=../test-results/frontend-e2e.xml
+cd ..
+
+# Backend Tests
+echo "🐍 Running Backend Tests..."
+poetry run pytest tests/ --junit-xml=test-results/backend.xml --cov=src --cov-report=xml
+
+# Java Tests
+echo "☕ Running Java Tests..."
+cd engine
+./gradlew test integrationTest -Dspring.profiles.active=test
+cp build/test-results/test/TEST-*.xml ../test-results/
+cd ..
+
+# Performance Tests
+echo "🚀 Running Performance Tests..."
+if command -v k6 &> /dev/null; then
+    k6 run --out json=test-results/load-test-results.json tests/load/load-test.js
+else
+    echo "⚠️  k6 not installed, skipping performance tests"
+fi
+
+# Generate comprehensive report
+echo "📊 Generating Test Report..."
+python scripts/generate_test_report.py
+
+echo "✅ All tests completed!"
+echo "📈 Report available at: reports/test-report.html"
+```
+</CodeGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Security Documentation" icon="shield" href="/security/api-security">
+    Learn about security testing and implementation
+  </Card>
+  <Card title="Troubleshooting Guide" icon="wrench" href="/troubleshooting/common-issues">
+    Debug common issues and problems
+  </Card>
+</CardGroup>
+
+<Note>
+  A comprehensive testing strategy is crucial for maintaining code quality and reliability. Regularly review and update your test coverage, and always write tests before fixing bugs or adding new features.
+</Note>

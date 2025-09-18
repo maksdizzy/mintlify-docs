@@ -1,97 +1,126 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Guru Network Framework"
+description: "Enterprise-grade Web3 automation platform bridging traditional web services with blockchain technology"
 ---
 
-## Setting up
+# Welcome to Guru Network Framework
 
-Get your documentation site up and running in minutes.
+Web3 automation platform that bridges traditional web services with blockchain technology through BPMN workflow orchestration.
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+## What is Guru Network?
 
-## Make it yours
+Guru Network Framework is a workflow automation platform that combines:
 
-Design a docs site that looks great and empowers your users.
+- **BPMN Workflow Engine** - Camunda-powered process orchestration
+- **Python Workers** - Async task processing for blockchain and AI operations
+- **Web Interface** - Next.js frontend with Telegram Mini App support
+- **Web3 Integration** - Direct blockchain interaction and DeFi automation
+- **Admin Tools** - FlowAPI admin interface for management and monitoring
 
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Workflow Orchestration" icon="diagram-project">
+    Visual workflow design with BPMN 2.0 standards for complex automation scenarios
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Blockchain Integration" icon="link">
+    Native support for Ethereum, BSC, Polygon with automated trading and DeFi operations
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="BPMN Orchestration" icon="arrows-maximize">
+    Visual workflow design with Camunda engine for complex automation scenarios
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Non-Custodial Workers" icon="shield-check">
+    Secure external workers that process tasks without holding user assets
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## Quick Navigation
 
-Everything you need to create world-class documentation.
+<CardGroup cols={3}>
+  <Card title="Get Started" icon="rocket" href="/introduction/overview">
+    Learn about the framework architecture and core concepts
+  </Card>
+  <Card title="Components" icon="puzzle-piece" href="/components/engine">
+    Explore the core services and their functionality
+  </Card>
+  <Card title="Development" icon="code" href="/development/environment">
+    Set up your development environment and start building
+  </Card>
+</CardGroup>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+## Architecture Overview
 
-## Need inspiration?
+The Guru Network Framework uses a simple component-based architecture:
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<div style={{minHeight: '600px', height: 'auto', margin: '20px 0', width: '100%', overflow: 'auto'}}>
+<Frame>
+```mermaid
+graph TB
+    subgraph "🎮 User Interface"
+        FE[Frontend<br/>Next.js 15 Telegram Mini App]
+        AD[Admin Interface<br/>FlowAPI Dashboard]
+    end
+
+    subgraph "⚙️ Core Services"
+        EG[Workflow Engine<br/>Camunda BPMN]
+        WK[External Workers<br/>Python Async]
+    end
+
+    subgraph "🔗 External Services"
+        BC[Blockchain Networks<br/>Ethereum, BSC, Polygon]
+        AI[AI Services<br/>OpenAI, Claude]
+        EX[External APIs<br/>CoinGecko, DEX APIs]
+    end
+
+    FE --> EG
+    AD --> EG
+    EG --> WK
+
+    WK --> BC
+    WK --> AI
+    WK --> EX
+
+    style FE fill:#10B981
+    style AD fill:#3B82F6
+    style EG fill:#F59E0B
+    style WK fill:#8B5CF6
+```
+</Frame>
+</div>
+
+## Use Cases
+
+The framework supports various automation scenarios:
+
+- **DeFi Trading Bots** - Automated trading strategies across multiple DEXs
+- **Yield Farming** - Automated liquidity provision and reward harvesting
+- **Portfolio Management** - Dynamic rebalancing and risk management
+- **Notification Systems** - Real-time alerts for market conditions and events
+- **Data Analytics** - Blockchain data collection and analysis workflows
+
+## Getting Help
+
+<CardGroup cols={2}>
+  <Card title="Documentation" icon="book">
+    Comprehensive guides covering all aspects of the framework
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/troubleshooting/common-issues">
+    Common issues and their solutions
+  </Card>
+</CardGroup>
+
+Ready to get started? Check out our [quick installation guide](/quick-start/installation) or explore our [comprehensive features](/introduction/features).
+
+## 🚀 Quick Links
+
+<CardGroup cols={3}>
+  <Card title="Quick Installation" icon="download" href="/quick-start/installation">
+    Get up and running in 5 minutes
+  </Card>
+  <Card title="System Architecture" icon="sitemap" href="/architecture/system-design">
+    Understand the framework design
+  </Card>
+  <Card title="Development Setup" icon="laptop-code" href="/development/environment">
+    Configure your dev environment
+  </Card>
+</CardGroup>

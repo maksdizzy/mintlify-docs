@@ -1,0 +1,343 @@
+---
+title: "Target Audience"
+description: "Who should use the Guru Network Framework and how to get started based on your role"
+icon: "users"
+---
+
+# Target Audience
+
+The Guru Network Framework is designed for multiple types of users, from individual developers to large enterprise teams. Here's how different roles can leverage the platform effectively.
+
+## 👨‍💻 External Developers
+
+### Who You Are
+Independent developers, startup teams, or consultants building Web3 applications and automation solutions.
+
+### What You Get
+<CardGroup cols={2}>
+  <Card title="Rapid Prototyping" icon="rocket">
+    Build and deploy Web3 automation in hours, not weeks
+  </Card>
+  <Card title="Production Ready" icon="shield-check">
+    Enterprise-grade infrastructure without enterprise complexity
+  </Card>
+  <Card title="Cost Effective" icon="dollar-sign">
+    Avoid building complex infrastructure from scratch
+  </Card>
+  <Card title="Community Support" icon="users">
+    Access to documentation, examples, and community help
+  </Card>
+</CardGroup>
+
+### Your Learning Path
+<Steps>
+  <Step title="Start with Quick Start">
+    Follow our [installation guide](/quick-start/prerequisites) to set up a development environment
+  </Step>
+  <Step title="Explore Examples">
+    Check out pre-built workflows in our [GitHub repository](https://github.com/guru-network/examples)
+  </Step>
+  <Step title="Build Your First Bot">
+    Create a simple trading bot using our [development templates](../development/environment)
+  </Step>
+  <Step title="Join the Community">
+    Connect with other developers on [Discord](https://discord.gg/guru-network)
+  </Step>
+</Steps>
+
+### Common Use Cases
+- **Trading Bots**: Automated arbitrage and grid trading strategies
+- **DeFi Tools**: Yield farming and liquidity management applications
+- **Data Analytics**: On-chain analytics and market monitoring tools
+- **Integration Services**: Connecting Web2 applications with Web3 functionality
+
+---
+
+## 🏢 DevOps Engineers
+
+### Who You Are
+Infrastructure engineers responsible for deploying and maintaining Web3 applications in production environments.
+
+### What You Need to Know
+<Info>
+  The framework follows standard DevOps practices and integrates with existing toolchains seamlessly.
+</Info>
+
+#### Infrastructure Requirements
+- **Containerization**: Docker and Kubernetes native
+- **Monitoring**: Prometheus, Grafana, and custom metrics
+- **Logging**: Structured logging with ELK stack integration
+- **CI/CD**: GitHub Actions, GitLab CI, and Jenkins support
+
+#### Deployment Options
+<Tabs>
+  <Tab title="Kubernetes">
+    ```yaml
+    # Helm values example
+    engine:
+      replicas: 3
+      resources:
+        requests:
+          memory: "1Gi"
+          cpu: "500m"
+
+    workers:
+      autoscaling:
+        enabled: true
+        minReplicas: 2
+        maxReplicas: 10
+    ```
+  </Tab>
+  <Tab title="Docker Compose">
+    ```yaml
+    # docker-compose.yml
+    services:
+      engine:
+        image: guru/engine:latest
+        environment:
+          - DATABASE_URL=${DATABASE_URL}
+        depends_on:
+          - postgres
+    ```
+  </Tab>
+  <Tab title="Cloud Native">
+    ```terraform
+    # Terraform configuration
+    resource "aws_ecs_service" "guru_api" {
+      name = "guru-flowapi"
+      cluster = aws_ecs_cluster.main.id
+      task_definition = aws_ecs_task_definition.guru_api.arn
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Your Responsibilities
+<AccordionGroup>
+  <Accordion title="Security Management">
+    - Configure JWT secrets and API keys
+    - Set up private key management (HSM integration)
+    - Implement network security policies
+    - Manage SSL/TLS certificates
+  </Accordion>
+
+  <Accordion title="Monitoring & Alerting">
+    - Set up health checks for all services
+    - Configure alerting for blockchain failures
+    - Monitor transaction costs and optimization
+    - Track system performance metrics
+  </Accordion>
+
+  <Accordion title="Backup & Recovery">
+    - Database backup strategies
+    - Disaster recovery procedures
+    - Configuration management
+    - State management for workflows
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## 🏗️ System Integrators
+
+### Who You Are
+Technical consultants and integration specialists connecting existing enterprise systems with blockchain functionality.
+
+### Integration Patterns
+<Card title="Common Architecture" icon="sitemap">
+  Enterprise ERP → Guru Framework → Multiple Blockchain Networks
+</Card>
+
+#### Popular Integration Scenarios
+1. **Payment Automation**: Convert traditional invoicing to crypto payments
+2. **Supply Chain Tracking**: Record logistics events on blockchain
+3. **Identity Management**: Blockchain-based authentication systems
+4. **Asset Tokenization**: Digital representation of physical assets
+
+### Technical Considerations
+<CardGroup cols={2}>
+  <Card title="API Compatibility" icon="plug">
+    RESTful APIs that integrate with existing enterprise systems
+  </Card>
+  <Card title="Data Transformation" icon="code">
+    Built-in tools for converting between different data formats
+  </Card>
+  <Card title="Security Compliance" icon="lock">
+    SOC2, ISO27001, and industry-specific compliance features
+  </Card>
+  <Card title="Scalability" icon="chart-line">
+    Handle enterprise-level transaction volumes
+  </Card>
+</CardGroup>
+
+### Implementation Approach
+<Steps>
+  <Step title="Requirements Analysis">
+    Understand the existing system architecture and integration points
+  </Step>
+  <Step title="Proof of Concept">
+    Build a small-scale integration to validate the approach
+  </Step>
+  <Step title="Security Review">
+    Conduct thorough security assessment of the integration
+  </Step>
+  <Step title="Production Deployment">
+    Deploy with proper monitoring and rollback capabilities
+  </Step>
+</Steps>
+
+---
+
+## 📊 Product Teams
+
+### Who You Are
+Product managers, business analysts, and technical leads defining Web3 product requirements and features.
+
+### Understanding Capabilities
+<Warning>
+  Product teams should understand both the possibilities and limitations of blockchain technology when defining requirements.
+</Warning>
+
+#### What's Possible
+- **Real-time Operations**: Sub-second response times for most operations
+- **Multi-Chain Support**: Operations across multiple blockchain networks
+- **Complex Logic**: Sophisticated business rules and decision trees
+- **Integration**: Seamless connection with existing products
+
+#### What to Consider
+- **Transaction Costs**: Gas fees vary significantly across networks
+- **Finality**: Blockchain transactions have different confirmation times
+- **Scalability**: Some operations may need queuing during high load
+- **Regulatory**: Compliance requirements vary by jurisdiction
+
+### Defining Requirements
+<Tabs>
+  <Tab title="Functional Requirements">
+    - Trading strategy parameters and constraints
+    - Risk management rules and thresholds
+    - User interface and experience requirements
+    - Performance and scalability targets
+  </Tab>
+  <Tab title="Non-Functional Requirements">
+    - Security and compliance standards
+    - Availability and uptime requirements
+    - Disaster recovery objectives
+    - Monitoring and alerting needs
+  </Tab>
+</Tabs>
+
+---
+
+## 🔍 Security Auditors
+
+### Who You Are
+Security professionals conducting audits of Web3 applications and infrastructure.
+
+### Audit Scope
+<Info>
+  The Guru Framework implements defense-in-depth security with multiple layers of protection.
+</Info>
+
+#### Areas to Review
+<CardGroup cols={2}>
+  <Card title="API Security" icon="shield-halved">
+    Authentication, authorization, rate limiting, input validation
+  </Card>
+  <Card title="Smart Contracts" icon="file-contract">
+    Contract logic, upgrade mechanisms, permission management
+  </Card>
+  <Card title="Infrastructure" icon="server">
+    Network security, secret management, container security
+  </Card>
+  <Card title="Operational Security" icon="user-shield">
+    Access controls, audit logging, incident response
+  </Card>
+</CardGroup>
+
+### Security Features
+<AccordionGroup>
+  <Accordion title="Authentication & Authorization">
+    - JWT-based authentication with refresh tokens
+    - Role-based access control (RBAC)
+    - API key management and rotation
+    - Multi-factor authentication support
+  </Accordion>
+
+  <Accordion title="Data Protection">
+    - Encryption at rest using AES-256
+    - TLS 1.3 for data in transit
+    - Private key protection with HSM support
+    - PII data handling and GDPR compliance
+  </Accordion>
+
+  <Accordion title="Operational Security">
+    - Comprehensive audit logging
+    - Real-time security monitoring
+    - Automated vulnerability scanning
+    - Incident response procedures
+  </Accordion>
+</AccordionGroup>
+
+### Audit Resources
+- **Security Documentation**: Detailed security architecture and controls
+- **Test Environments**: Isolated environments for security testing
+- **Compliance Reports**: SOC2 Type II and ISO27001 documentation
+- **Penetration Testing**: Results from third-party security assessments
+
+---
+
+## 💼 Enterprise Teams
+
+### Who You Are
+Large organizations looking to integrate blockchain technology into existing business processes.
+
+### Enterprise Requirements
+<Card title="Enterprise Checklist" icon="list-check">
+  ✅ **Scalability**: Handle thousands of concurrent operations
+  ✅ **Security**: Bank-grade security and compliance
+  ✅ **Integration**: Work with existing enterprise systems
+  ✅ **Support**: Dedicated support and SLA guarantees
+  ✅ **Governance**: Clear upgrade and maintenance procedures
+</Card>
+
+#### Organizational Benefits
+- **Risk Reduction**: Proven technology stack with enterprise support
+- **Time to Market**: Faster deployment compared to building from scratch
+- **Cost Optimization**: Reduce infrastructure and development costs
+- **Competitive Advantage**: Early adoption of Web3 technologies
+
+### Implementation Strategy
+<Steps>
+  <Step title="Executive Buy-in">
+    Present business case with ROI projections and risk mitigation
+  </Step>
+  <Step title="Pilot Project">
+    Start with limited scope to prove value and build confidence
+  </Step>
+  <Step title="Cross-functional Team">
+    Include stakeholders from IT, security, compliance, and business units
+  </Step>
+  <Step title="Phased Rollout">
+    Gradually expand scope based on pilot results and lessons learned
+  </Step>
+</Steps>
+
+---
+
+## 🎯 Getting Started by Role
+
+<CardGroup cols={3}>
+  <Card title="Developers" icon="code" href="/quick-start/prerequisites">
+    Jump into our quick start guide and build your first workflow
+  </Card>
+  <Card title="DevOps" icon="server" href="/deployment/docker">
+    Review deployment options and infrastructure requirements
+  </Card>
+  <Card title="Product Teams" icon="users" href="/introduction/use-cases">
+    Explore use cases and understand what's possible
+  </Card>
+</CardGroup>
+
+<Note>
+  No matter your role, we recommend starting with our [architecture overview](/architecture/overview) to understand how the framework components work together.
+</Note>

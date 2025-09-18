@@ -1,0 +1,465 @@
+---
+title: "Prerequisites"
+description: "System requirements and prerequisites for installing the Guru Network Framework"
+icon: "list-check"
+---
+
+# Prerequisites
+
+Before installing the Guru Network Framework, ensure your system meets the following requirements and has the necessary tools installed.
+
+## System Requirements
+
+### 💻 Hardware Requirements
+
+<CardGroup cols={2}>
+  <Card title="Development Environment" icon="laptop">
+    **CPU**: 4+ cores (x86_64 or ARM64)<br/>
+    **RAM**: 8GB minimum, 16GB recommended<br/>
+    **Storage**: 50GB available space<br/>
+    **Network**: Broadband internet connection
+  </Card>
+  <Card title="Production Environment" icon="server">
+    **CPU**: 8+ cores per service<br/>
+    **RAM**: 32GB minimum, 64GB+ recommended<br/>
+    **Storage**: 500GB+ SSD storage<br/>
+    **Network**: High-speed, low-latency connection
+  </Card>
+</CardGroup>
+
+### 🖥️ Operating System Support
+
+<Tabs>
+  <Tab title="Linux (Recommended)">
+    - **Ubuntu**: 20.04 LTS or later
+    - **CentOS**: 8 or later
+    - **RHEL**: 8 or later
+    - **Debian**: 11 or later
+    - **Amazon Linux**: 2 or later
+  </Tab>
+  <Tab title="macOS">
+    - **macOS**: 11.0 (Big Sur) or later
+    - **Homebrew**: Latest version
+    - **Xcode**: Command Line Tools
+  </Tab>
+  <Tab title="Windows">
+    - **Windows**: 10 or 11 (64-bit)
+    - **WSL2**: Windows Subsystem for Linux 2
+    - **Docker Desktop**: Latest version
+  </Tab>
+</Tabs>
+
+## Required Software
+
+### 🐳 Container Platform
+
+<Warning>
+  Docker is the primary deployment method. Ensure you have the latest stable version installed.
+</Warning>
+
+<Steps>
+  <Step title="Install Docker">
+    ```bash
+    # Ubuntu/Debian
+    curl -fsSL https://get.docker.com -o get-docker.sh
+    sudo sh get-docker.sh
+    sudo usermod -aG docker $USER
+
+    # macOS
+    brew install --cask docker
+
+    # Or download from https://docker.com
+    ```
+  </Step>
+  <Step title="Install Docker Compose">
+    ```bash
+    # Linux
+    sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+    sudo chmod +x /usr/local/bin/docker-compose
+
+    # macOS (included with Docker Desktop)
+    # Windows (included with Docker Desktop)
+    ```
+  </Step>
+  <Step title="Verify Installation">
+    ```bash
+    docker --version
+    docker-compose --version
+
+    # Should output version numbers
+    # Docker version 24.0.0 or later
+    # Docker Compose version 2.0.0 or later
+    ```
+  </Step>
+</Steps>
+
+### ☸️ Kubernetes (Production)
+
+<AccordionGroup>
+  <Accordion title="Local Development">
+    ```bash
+    # Install kubectl
+    curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+    sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+
+    # Install minikube for local testing
+    curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+    sudo install minikube-linux-amd64 /usr/local/bin/minikube
+
+    # Or use kind
+    go install sigs.k8s.io/kind@v0.20.0
+    ```
+  </Accordion>
+
+  <Accordion title="Cloud Providers">
+    - **AWS EKS**: Managed Kubernetes service
+    - **Google GKE**: Google Kubernetes Engine
+    - **Azure AKS**: Azure Kubernetes Service
+    - **DigitalOcean**: Managed Kubernetes
+  </Accordion>
+
+  <Accordion title="Helm Package Manager">
+    ```bash
+    # Install Helm
+    curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+    # Verify installation
+    helm version
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Development Tools
+
+### 🛠️ Required Tools
+
+<CardGroup cols={2}>
+  <Card title="Node.js & pnpm" icon="js">
+    **Version**: Node.js 18+ with pnpm 8+<br/>
+    **Purpose**: Frontend development and build tools
+  </Card>
+  <Card title="Python" icon="python">
+    **Version**: Python 3.11+<br/>
+    **Purpose**: Backend services and worker development
+  </Card>
+  <Card title="Java" icon="java">
+    **Version**: OpenJDK 17+<br/>
+    **Purpose**: Camunda Engine development
+  </Card>
+  <Card title="Git" icon="git-alt">
+    **Version**: Git 2.0+<br/>
+    **Purpose**: Version control and deployment
+  </Card>
+</CardGroup>
+
+#### Installation Commands
+
+<Tabs>
+  <Tab title="Node.js & pnpm">
+    ```bash
+    # Install Node.js via Node Version Manager
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+    source ~/.bashrc
+    nvm install 18
+    nvm use 18
+
+    # Install pnpm
+    npm install -g pnpm
+
+    # Verify installation
+    node --version  # Should be v18.0.0 or later
+    pnpm --version  # Should be 8.0.0 or later
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```bash
+    # Ubuntu/Debian
+    sudo apt update
+    sudo apt install python3.11 python3.11-pip python3.11-venv
+
+    # macOS
+    brew install python@3.11
+
+    # Install Poetry (recommended)
+    curl -sSL https://install.python-poetry.org | python3 -
+
+    # Verify installation
+    python3.11 --version  # Should be 3.11.0 or later
+    poetry --version      # Should be 1.4.0 or later
+    ```
+  </Tab>
+  <Tab title="Java">
+    ```bash
+    # Ubuntu/Debian
+    sudo apt install openjdk-17-jdk
+
+    # macOS
+    brew install openjdk@17
+
+    # Install Gradle
+    curl -s "https://get.sdkman.io" | bash
+    source ~/.sdkman/bin/sdkman-init.sh
+    sdk install gradle
+
+    # Verify installation
+    java --version    # Should be 17.0.0 or later
+    gradle --version  # Should be 8.0 or later
+    ```
+  </Tab>
+</Tabs>
+
+### 🎨 Optional Development Tools
+
+<AccordionGroup>
+  <Accordion title="Code Editors">
+    - **VS Code**: Recommended with extensions
+      - Docker extension
+      - Python extension
+      - TypeScript/JavaScript extension
+      - Kubernetes extension
+    - **IntelliJ IDEA**: For Java/Spring development
+    - **PyCharm**: For Python development
+  </Accordion>
+
+  <Accordion title="Database Tools">
+    - **pgAdmin**: PostgreSQL administration
+    - **Redis Insight**: Redis management
+    - **DBeaver**: Universal database client
+    - **DataGrip**: JetBrains database IDE
+  </Accordion>
+
+  <Accordion title="API Development">
+    - **Postman**: API testing and development
+    - **Insomnia**: Alternative API client
+    - **Bruno**: Open-source API client
+    - **HTTPie**: Command-line HTTP client
+  </Accordion>
+</AccordionGroup>
+
+## External Services
+
+### 🔗 Required API Keys
+
+<Info>
+  You'll need API keys from various services. Start with free tiers for development.
+</Info>
+
+<CardGroup cols={2}>
+  <Card title="Blockchain RPCs" icon="link">
+    **Infura**: Ethereum and other EVM chains<br/>
+    **Alchemy**: Enhanced blockchain APIs<br/>
+    **QuickNode**: Multi-chain RPC provider<br/>
+    **Ankr**: Decentralized RPC endpoints
+  </Card>
+  <Card title="AI Services" icon="brain">
+    **OpenAI**: GPT models for AI features<br/>
+    **Anthropic**: Claude models (optional)<br/>
+    **Cohere**: Alternative LLM provider<br/>
+    **Hugging Face**: Open-source models
+  </Card>
+</CardGroup>
+
+#### Setting Up API Keys
+
+<Steps>
+  <Step title="Blockchain RPCs">
+    ```bash
+    # Sign up for Infura at https://infura.io
+    # Get your project ID and endpoints
+
+    # Example endpoints:
+    # Ethereum: https://mainnet.infura.io/v3/YOUR_PROJECT_ID
+    # Polygon: https://polygon-mainnet.infura.io/v3/YOUR_PROJECT_ID
+    ```
+  </Step>
+  <Step title="AI Services">
+    ```bash
+    # OpenAI API key from https://platform.openai.com
+    # Format: sk-...
+
+    # Store securely - never commit to version control
+    echo "OPENAI_API_KEY=your_key_here" >> .env.local
+    ```
+  </Step>
+</Steps>
+
+### 📱 Optional Services
+
+<AccordionGroup>
+  <Accordion title="Telegram Bot">
+    ```bash
+    # Create bot via @BotFather on Telegram
+    # Get bot token: 123456789:ABCdefGHIjklMNOpqrsTUVwxyz
+
+    # Add to environment
+    echo "TELEGRAM_BOT_TOKEN=your_bot_token" >> .env.local
+    ```
+  </Accordion>
+
+  <Accordion title="Monitoring Services">
+    - **DataDog**: Application monitoring
+    - **New Relic**: Performance monitoring
+    - **Sentry**: Error tracking
+    - **LogRocket**: Frontend monitoring
+  </Accordion>
+
+  <Accordion title="Cloud Storage">
+    - **AWS S3**: Object storage
+    - **Google Cloud Storage**: Alternative storage
+    - **CloudFlare R2**: Cost-effective storage
+    - **MinIO**: Self-hosted S3 compatible
+  </Accordion>
+</AccordionGroup>
+
+## Environment Preparation
+
+### 🔧 System Configuration
+
+<Tabs>
+  <Tab title="Linux Optimization">
+    ```bash
+    # Increase file descriptor limits
+    echo "* soft nofile 65536" | sudo tee -a /etc/security/limits.conf
+    echo "* hard nofile 65536" | sudo tee -a /etc/security/limits.conf
+
+    # Configure Docker daemon
+    sudo mkdir -p /etc/docker
+    sudo tee /etc/docker/daemon.json <<EOF
+    {
+      "log-driver": "json-file",
+      "log-opts": {
+        "max-size": "10m",
+        "max-file": "3"
+      },
+      "storage-driver": "overlay2"
+    }
+    EOF
+
+    sudo systemctl restart docker
+    ```
+  </Tab>
+  <Tab title="macOS Configuration">
+    ```bash
+    # Increase Docker memory allocation
+    # Docker Desktop > Settings > Resources > Memory: 8GB+
+
+    # Install development dependencies
+    xcode-select --install
+
+    # Configure shell (if using zsh)
+    echo 'export PATH="/opt/homebrew/bin:$PATH"' >> ~/.zshrc
+    source ~/.zshrc
+    ```
+  </Tab>
+</Tabs>
+
+### 🌐 Network Configuration
+
+<Warning>
+  Ensure your firewall allows the required ports for development.
+</Warning>
+
+<CardGroup cols={2}>
+  <Card title="Development Ports" icon="network-wired">
+    **3000**: Frontend (Next.js)<br/>
+    **8000**: FlowAPI (FastAPI)<br/>
+    **8080**: Engine (Camunda)<br/>
+    **8001**: Warehouse (Analytics)
+  </Card>
+  <Card title="Database Ports" icon="database">
+    **5432**: PostgreSQL<br/>
+    **6379**: Redis<br/>
+    **8123**: ClickHouse<br/>
+    **9200**: Elasticsearch
+  </Card>
+</CardGroup>
+
+```bash
+# Ubuntu firewall configuration
+sudo ufw allow 3000/tcp
+sudo ufw allow 8000/tcp
+sudo ufw allow 8080/tcp
+sudo ufw allow 8001/tcp
+
+# For development only - be more restrictive in production
+```
+
+## Validation Checklist
+
+Before proceeding with installation, verify your setup:
+
+<Steps>
+  <Step title="Container Platform">
+    ```bash
+    docker run hello-world
+    docker-compose --version
+    ```
+    ✅ Should run without errors
+  </Step>
+  <Step title="Development Tools">
+    ```bash
+    node --version    # ≥ v18.0.0
+    python3 --version # ≥ 3.11.0
+    java --version    # ≥ 17.0.0
+    git --version     # ≥ 2.0.0
+    ```
+    ✅ All should show correct versions
+  </Step>
+  <Step title="Network Access">
+    ```bash
+    curl -I https://api.github.com
+    curl -I https://registry-1.docker.io
+    ```
+    ✅ Should return HTTP 200 responses
+  </Step>
+  <Step title="API Keys">
+    ```bash
+    # Test blockchain RPC
+    curl -X POST https://mainnet.infura.io/v3/YOUR_PROJECT_ID \
+      -H "Content-Type: application/json" \
+      -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
+    ```
+    ✅ Should return current block number
+  </Step>
+</Steps>
+
+<Note>
+  All prerequisites met? Great! You're ready to proceed with the [installation guide](/quick-start/installation).
+</Note>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Docker Issues">
+    **Problem**: Permission denied when running Docker commands
+
+    **Solution**:
+    ```bash
+    sudo usermod -aG docker $USER
+    newgrp docker
+    # Or restart your terminal
+    ```
+  </Accordion>
+
+  <Accordion title="Port Conflicts">
+    **Problem**: Port already in use errors
+
+    **Solution**:
+    ```bash
+    # Find process using port
+    sudo lsof -i :8080
+
+    # Kill process if safe to do so
+    sudo kill -9 PID
+    ```
+  </Accordion>
+
+  <Accordion title="Memory Issues">
+    **Problem**: Out of memory errors during Docker builds
+
+    **Solution**:
+    - Increase Docker Desktop memory allocation (macOS/Windows)
+    - Add swap space (Linux)
+    - Use multi-stage builds to reduce memory usage
+  </Accordion>
+</AccordionGroup>

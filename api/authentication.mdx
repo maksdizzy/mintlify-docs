@@ -1,0 +1,606 @@
+---
+title: "Authentication"
+description: "Authentication and authorization mechanisms in the Guru Network Framework API"
+icon: "key"
+---
+
+# Authentication
+
+The Guru Network Framework uses **JWT (JSON Web Tokens)** for authentication with role-based access control (RBAC) for authorization.
+
+## Authentication Flow
+
+<Steps>
+  <Step title="User Registration/Login">
+    User provides credentials to obtain access and refresh tokens
+  </Step>
+  <Step title="Token Storage">
+    Client stores tokens securely (HttpOnly cookies recommended)
+  </Step>
+  <Step title="API Requests">
+    Include access token in Authorization header for API calls
+  </Step>
+  <Step title="Token Refresh">
+    Use refresh token to obtain new access tokens when they expire
+  </Step>
+</Steps>
+
+## Endpoints
+
+### Register User
+
+Create a new user account in the system.
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://api.guru-network.io/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "SecurePassword123!",
+    "username": "johndoe",
+    "full_name": "John Doe"
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('/api/auth/register', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    email: 'user@example.com',
+    password: 'SecurePassword123!',
+    username: 'johndoe',
+    full_name: 'John Doe'
+  })
+});
+
+const result = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://api.guru-network.io/auth/register',
+    json={
+        'email': 'user@example.com',
+        'password': 'SecurePassword123!',
+        'username': 'johndoe',
+        'full_name': 'John Doe'
+    }
+)
+
+result = response.json()
+```
+</CodeGroup>
+
+<ParamField body="email" type="string" required>
+  User's email address. Must be unique and valid format.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  User's password. Must be at least 8 characters with uppercase, lowercase, number, and special character.
+</ParamField>
+
+<ParamField body="username" type="string" required>
+  Unique username for the user. 3-50 characters, alphanumeric and underscores only.
+</ParamField>
+
+<ParamField body="full_name" type="string">
+  User's full display name. Optional field for personalization.
+</ParamField>
+
+<ResponseExample>
+```json 201 Created
+{
+  "user_id": "uuid-v4-string",
+  "username": "johndoe",
+  "email": "user@example.com",
+  "full_name": "John Doe",
+  "role": "user",
+  "created_at": "2024-01-15T10:30:00Z",
+  "is_verified": false
+}
+```
+
+```json 400 Bad Request
+{
+  "error": "validation_error",
+  "message": "Invalid email format",
+  "details": {
+    "field": "email",
+    "code": "invalid_format"
+  }
+}
+```
+
+```json 409 Conflict
+{
+  "error": "user_exists",
+  "message": "User with this email already exists"
+}
+```
+</ResponseExample>
+
+### Login
+
+Authenticate user and receive access tokens.
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://api.guru-network.io/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "SecurePassword123!"
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('/api/auth/login', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    email: 'user@example.com',
+    password: 'SecurePassword123!'
+  })
+});
+
+const tokens = await response.json();
+
+// Store tokens securely
+localStorage.setItem('access_token', tokens.access_token);
+// Note: Refresh token should be stored in HttpOnly cookie
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://api.guru-network.io/auth/login',
+    json={
+        'email': 'user@example.com',
+        'password': 'SecurePassword123!'
+    }
+)
+
+tokens = response.json()
+access_token = tokens['access_token']
+```
+</CodeGroup>
+
+<ParamField body="email" type="string" required>
+  User's registered email address
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  User's password
+</ParamField>
+
+<ResponseExample>
+```json 200 OK
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "Bearer",
+  "expires_in": 86400,
+  "user": {
+    "user_id": "uuid-v4-string",
+    "username": "johndoe",
+    "email": "user@example.com",
+    "role": "user"
+  }
+}
+```
+
+```json 401 Unauthorized
+{
+  "error": "invalid_credentials",
+  "message": "Invalid email or password"
+}
+```
+
+```json 423 Locked
+{
+  "error": "account_locked",
+  "message": "Account temporarily locked due to multiple failed login attempts",
+  "retry_after": 300
+}
+```
+</ResponseExample>
+
+### Refresh Token
+
+Obtain a new access token using a valid refresh token.
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://api.guru-network.io/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{
+    "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('/api/auth/refresh', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    refresh_token: refreshToken
+  })
+});
+
+const tokens = await response.json();
+```
+</CodeGroup>
+
+<ParamField body="refresh_token" type="string" required>
+  Valid refresh token received from login
+</ParamField>
+
+<ResponseExample>
+```json 200 OK
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "Bearer",
+  "expires_in": 86400
+}
+```
+
+```json 401 Unauthorized
+{
+  "error": "invalid_token",
+  "message": "Refresh token is invalid or expired"
+}
+```
+</ResponseExample>
+
+## Authorization
+
+### Including Tokens in Requests
+
+Include the access token in the `Authorization` header for all API requests:
+
+<CodeGroup>
+```bash cURL
+curl -X GET https://api.guru-network.io/workflows \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+```
+
+```javascript JavaScript
+const response = await fetch('/api/workflows', {
+  headers: {
+    'Authorization': `Bearer ${accessToken}`,
+    'Content-Type': 'application/json'
+  }
+});
+```
+
+```python Python
+headers = {
+    'Authorization': f'Bearer {access_token}',
+    'Content-Type': 'application/json'
+}
+
+response = requests.get(
+    'https://api.guru-network.io/workflows',
+    headers=headers
+)
+```
+</CodeGroup>
+
+### Role-Based Access Control
+
+The framework implements RBAC with the following roles:
+
+<AccordionGroup>
+  <Accordion title="User Role">
+    **Permissions**:
+    - Read own workflows and data
+    - Execute pre-approved workflows
+    - View own portfolio and trades
+    - Access basic API endpoints
+
+    **Restrictions**:
+    - Cannot create or modify workflows
+    - Cannot access other users' data
+    - Cannot perform administrative actions
+  </Accordion>
+
+  <Accordion title="Developer Role">
+    **Permissions**:
+    - All user permissions
+    - Create and modify workflows
+    - Deploy new workflow versions
+    - Access development tools and APIs
+    - View system logs and metrics
+
+    **Restrictions**:
+    - Cannot access other users' private data
+    - Cannot perform user management
+    - Limited administrative access
+  </Accordion>
+
+  <Accordion title="Admin Role">
+    **Permissions**:
+    - All developer permissions
+    - User management and access control
+    - System configuration and settings
+    - Access to all data and workflows
+    - System monitoring and maintenance
+
+    **Restrictions**:
+    - Actions are logged for audit purposes
+    - Some operations require additional confirmation
+  </Accordion>
+</AccordionGroup>
+
+### Permission Checking
+
+<CodeGroup>
+```python Python Example
+from functools import wraps
+from fastapi import HTTPException, Depends
+
+def require_permission(permission: str):
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            user = kwargs.get('current_user')
+            if not user.has_permission(permission):
+                raise HTTPException(
+                    status_code=403,
+                    detail="Insufficient permissions"
+                )
+            return await func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+@app.post("/workflows")
+@require_permission("workflow:create")
+async def create_workflow(
+    workflow_data: WorkflowCreate,
+    current_user: User = Depends(get_current_user)
+):
+    return await workflow_service.create(workflow_data, current_user)
+```
+
+```javascript Frontend Example
+const checkPermission = (user, permission) => {
+  return user.permissions.includes(permission) ||
+         user.role === 'admin';
+};
+
+// Conditional UI rendering
+{checkPermission(user, 'workflow:create') && (
+  <CreateWorkflowButton />
+)}
+
+// Route protection
+const ProtectedRoute = ({ permission, children }) => {
+  const { user } = useAuth();
+
+  if (!checkPermission(user, permission)) {
+    return <UnauthorizedPage />;
+  }
+
+  return children;
+};
+```
+</CodeGroup>
+
+## Token Management
+
+### Token Lifecycle
+
+<Tabs>
+  <Tab title="Access Tokens">
+    - **Lifetime**: 24 hours (configurable)
+    - **Purpose**: API access authorization
+    - **Storage**: Memory or secure storage (not localStorage)
+    - **Refresh**: Automatic via refresh token
+  </Tab>
+  <Tab title="Refresh Tokens">
+    - **Lifetime**: 30 days (configurable)
+    - **Purpose**: Obtain new access tokens
+    - **Storage**: HttpOnly cookie (recommended)
+    - **Rotation**: New refresh token issued on each use
+  </Tab>
+</Tabs>
+
+### Security Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Frontend Security" icon="shield-check">
+    - Store access tokens in memory or sessionStorage
+    - Use HttpOnly cookies for refresh tokens
+    - Implement automatic token refresh
+    - Clear tokens on logout
+  </Card>
+  <Card title="Backend Security" icon="server">
+    - Use strong JWT signing keys (256-bit)
+    - Implement token blacklisting
+    - Rate limit authentication endpoints
+    - Log all authentication events
+  </Card>
+</CardGroup>
+
+### Token Refresh Implementation
+
+<CodeGroup>
+```javascript Automatic Refresh
+class ApiClient {
+  constructor(baseURL) {
+    this.baseURL = baseURL;
+    this.accessToken = null;
+    this.isRefreshing = false;
+    this.refreshSubscribers = [];
+  }
+
+  async request(endpoint, options = {}) {
+    let response = await this.makeRequest(endpoint, options);
+
+    if (response.status === 401 && !this.isRefreshing) {
+      await this.refreshToken();
+      response = await this.makeRequest(endpoint, options);
+    }
+
+    return response;
+  }
+
+  async makeRequest(endpoint, options) {
+    return fetch(`${this.baseURL}${endpoint}`, {
+      ...options,
+      headers: {
+        'Authorization': `Bearer ${this.accessToken}`,
+        'Content-Type': 'application/json',
+        ...options.headers
+      }
+    });
+  }
+
+  async refreshToken() {
+    if (this.isRefreshing) {
+      return new Promise(resolve => {
+        this.refreshSubscribers.push(resolve);
+      });
+    }
+
+    this.isRefreshing = true;
+
+    try {
+      const response = await fetch('/api/auth/refresh', {
+        method: 'POST',
+        credentials: 'include' // Include refresh token cookie
+      });
+
+      if (response.ok) {
+        const { access_token } = await response.json();
+        this.accessToken = access_token;
+        this.onTokenRefreshed();
+      } else {
+        this.logout();
+      }
+    } finally {
+      this.isRefreshing = false;
+    }
+  }
+
+  onTokenRefreshed() {
+    this.refreshSubscribers.forEach(callback => callback());
+    this.refreshSubscribers = [];
+  }
+}
+```
+
+```python Backend Validation
+from jose import JWTError, jwt
+from datetime import datetime, timedelta
+
+class JWTManager:
+    def __init__(self, secret_key: str, algorithm: str = "HS256"):
+        self.secret_key = secret_key
+        self.algorithm = algorithm
+
+    def create_access_token(self, user_id: str, role: str) -> str:
+        expire = datetime.utcnow() + timedelta(hours=24)
+        payload = {
+            "sub": user_id,
+            "role": role,
+            "exp": expire,
+            "iat": datetime.utcnow(),
+            "type": "access"
+        }
+        return jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
+
+    def verify_token(self, token: str) -> dict:
+        try:
+            payload = jwt.decode(
+                token,
+                self.secret_key,
+                algorithms=[self.algorithm]
+            )
+
+            if payload.get("type") != "access":
+                raise JWTError("Invalid token type")
+
+            return payload
+        except JWTError:
+            return None
+
+    def is_token_blacklisted(self, token: str) -> bool:
+        # Check against blacklist in Redis
+        return redis_client.sismember("blacklisted_tokens", token)
+```
+</CodeGroup>
+
+## Error Handling
+
+<ResponseField name="error" type="string">
+  Error code identifying the type of authentication error
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Human-readable error message
+</ResponseField>
+
+<ResponseField name="details" type="object">
+  Additional error details when available
+</ResponseField>
+
+### Common Error Codes
+
+<AccordionGroup>
+  <Accordion title="invalid_credentials">
+    **Status**: 401 Unauthorized
+    **Cause**: Wrong email/password combination
+    **Solution**: Verify credentials and try again
+  </Accordion>
+
+  <Accordion title="invalid_token">
+    **Status**: 401 Unauthorized
+    **Cause**: Token is malformed, expired, or revoked
+    **Solution**: Refresh token or re-authenticate
+  </Accordion>
+
+  <Accordion title="insufficient_permissions">
+    **Status**: 403 Forbidden
+    **Cause**: User lacks required permissions for action
+    **Solution**: Contact admin for permission grant
+  </Accordion>
+
+  <Accordion title="account_locked">
+    **Status**: 423 Locked
+    **Cause**: Too many failed login attempts
+    **Solution**: Wait for lockout period to expire
+  </Accordion>
+
+  <Accordion title="rate_limit_exceeded">
+    **Status**: 429 Too Many Requests
+    **Cause**: Too many authentication requests
+    **Solution**: Wait before retrying
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Development Guide" icon="code" href="../development/api-development">
+    Learn how to develop APIs with the framework
+  </Card>
+  <Card title="Security Guide" icon="shield" href="../security/api-security">
+    Understand security best practices and implementation
+  </Card>
+</CardGroup>
+
+<Note>
+  For production deployments, consider implementing additional security measures like multi-factor authentication (MFA) and IP whitelisting.
+</Note>

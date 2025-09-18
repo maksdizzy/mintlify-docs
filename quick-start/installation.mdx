@@ -1,0 +1,238 @@
+---
+title: "Quick Installation"
+description: "Get the Guru Network Framework up and running in 5 minutes"
+icon: "download"
+---
+
+# Quick Installation
+
+Get the Guru Network Framework running locally in just a few minutes with our streamlined installation process.
+
+## 🚀 Quick Start
+
+<CodeGroup>
+```bash Docker (Recommended)
+# Clone the repository
+git clone <repository-url>
+cd guru-network-mono
+
+# Start the services
+docker-compose up -d --build
+```
+
+```bash Development Setup
+# Clone and setup individual components
+git clone <repository-url>
+cd guru-network-mono
+
+# Copy environment template
+cp .env.example .env
+```
+</CodeGroup>
+
+## 📋 Prerequisites
+
+<CardGroup cols={2}>
+  <Card title="Required Software" icon="download">
+    - **Docker** 20.10+ and Docker Compose 2.0+
+    - **Git** 2.30+ for cloning the repository
+    - **4GB RAM** minimum (8GB recommended)
+    - **10GB free disk space** for containers and data
+  </Card>
+  <Card title="Optional Tools" icon="tools">
+    - **Node.js** 18+ for frontend development
+    - **Python** 3.11+ for worker development
+    - **Java** 17+ for engine development
+    - **PostgreSQL client** for database access
+  </Card>
+</CardGroup>
+
+## 🐳 Docker Installation (Recommended)
+
+### Step 1: Clone Repository
+```bash
+git clone <repository-url>
+cd guru-network-mono
+```
+
+### Step 2: Environment Setup
+```bash
+# Copy environment template
+cp .env.example .env
+
+# Edit configuration (optional - defaults work for local development)
+nano .env
+```
+
+### Step 3: Start Services
+```bash
+# Start core services (engine, gui, workers)
+docker-compose up -d --build
+
+# Or start with logs visible
+docker-compose up --build
+```
+
+### Step 4: Verify Installation
+<Steps>
+  <Step title="Check Service Status">
+    ```bash
+    docker-compose ps
+    ```
+    All services should show "Up" status
+  </Step>
+  <Step title="Access Web Interface">
+    - **Frontend**: http://localhost:3000 (Next.js Telegram Mini App)
+    - **Camunda Cockpit**: http://localhost:8080/camunda (demo/demo)
+    - **Workers**: Check status with `docker-compose logs external-workers`
+  </Step>
+  <Step title="Test Services">
+    ```bash
+    # Check Camunda engine
+    curl http://localhost:8080/engine-rest/engine
+
+    # Check frontend
+    curl http://localhost:3000
+    ```
+  </Step>
+</Steps>
+
+## ✅ Post-Installation Verification
+
+### Health Checks
+
+<CodeGroup>
+```bash Service Status
+# Check all services
+docker-compose ps
+
+# Check engine health
+curl -s http://localhost:8080/engine-rest/version | jq .
+
+# View worker logs
+docker-compose logs external-workers
+```
+
+```bash Individual Services
+# Check frontend
+curl http://localhost:3000
+
+# Check if workers are processing tasks
+docker-compose logs -f external-workers
+```
+</CodeGroup>
+
+## 🔧 Configuration
+
+### Basic Configuration
+
+<Tabs>
+  <Tab title="Development">
+    ```bash
+    # Worker configuration
+    WORKER_SCRIPTS=messaging/telegram_message_worker.py,testnet_arbitrage/get_last_price.py
+    CAMUNDA_URL=http://engine:8080/engine-rest
+    CAMUNDA_USER=demo
+    CAMUNDA_PASSWORD=demo
+
+    # Blockchain configuration (optional)
+    ETHEREUM_RPC_URL=https://goerli.infura.io/v3/your-api-key
+
+    # Enable debug logging
+    LOG_LEVEL=debug
+    ```
+  </Tab>
+  <Tab title="Production">
+    ```bash
+    # Production worker configuration
+    WORKER_SCRIPTS=your-production-workers.py
+    CAMUNDA_URL=https://your-engine-domain/engine-rest
+    CAMUNDA_USER=production-user
+    CAMUNDA_PASSWORD=secure-password
+
+    # Use mainnet with proper API keys
+    ETHEREUM_RPC_URL=https://mainnet.infura.io/v3/your-api-key
+
+    # Secure logging
+    LOG_LEVEL=info
+    ```
+  </Tab>
+</Tabs>
+
+## 🚨 Troubleshooting
+
+### Common Issues
+
+<AccordionGroup>
+  <Accordion title="Docker Compose Fails to Start">
+    **Symptoms**: Services fail to start or show error status
+
+    **Solutions**:
+    ```bash
+    # Check Docker daemon is running
+    docker version
+
+    # Check port conflicts
+    netstat -tlnp | grep :8080  # Camunda engine
+    netstat -tlnp | grep :3000  # Frontend
+
+    # Reset Docker Compose
+    docker-compose down -v
+    docker-compose up -d --build --force-recreate
+    ```
+  </Accordion>
+
+  <Accordion title="Worker Connection Issues">
+    **Symptoms**: "Connection refused" to Camunda engine
+
+    **Solutions**:
+    ```bash
+    # Check worker logs
+    docker-compose logs external-workers
+
+    # Verify engine is accessible
+    curl http://localhost:8080/engine-rest/engine
+
+    # Restart workers
+    docker-compose restart external-workers
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## 🎯 Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Development Environment" icon="laptop-code" href="/development/environment">
+    Set up your development environment for building custom strategies
+  </Card>
+  <Card title="Architecture Overview" icon="sitemap" href="/architecture/system-design">
+    Understand the system architecture and component interactions
+  </Card>
+  <Card title="First Strategy" icon="play" href="/development/api-development">
+    Create your first automated trading strategy
+  </Card>
+  <Card title="Component Guide" icon="puzzle-piece" href="/components/engine">
+    Deep dive into the core framework components
+  </Card>
+</CardGroup>
+
+## 📚 Additional Resources
+
+<CardGroup cols={2}>
+  <Card title="Source Code" icon="github">
+    Access the complete source code in the guru-network-mono repository
+  </Card>
+  <Card title="Community Discord" icon="discord" href="https://discord.gg/dPW8fzwzz9">
+    Join our community for support and discussions
+  </Card>
+  <Card title="Video Tutorials" icon="youtube" href="https://www.youtube.com/@gurunetwork_ai">
+    Watch step-by-step video guides and tutorials
+  </Card>
+  <Card title="Telegram Updates" icon="telegram" href="https://t.me/dexguru">
+    Get the latest updates and announcements
+  </Card>
+</CardGroup>
+
+<Note>
+  The installation process typically takes 5-10 minutes depending on your internet connection and system specifications. If you encounter any issues, check our troubleshooting guide or ask for help in our Discord community.
+</Note>
