@@ -56,7 +56,10 @@
       "pages": [
         "components/engine",
         "components/workers",
-        "components/flowapi"
+        {
+          "page": "components/flowapi",
+          "icon": "flow"
+        }
       ]
     },
     {
