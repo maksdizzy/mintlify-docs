@@ -10,90 +10,97 @@ The Guru Network Framework follows a **microservices architecture** pattern with
 
 ## System Architecture
 
-<div style={{minHeight: '600px', height: 'auto', margin: '20px 0', width: '100%', overflow: 'auto'}}>
+<div style={{ minHeight:"600px",height:"auto",margin:"20px 0",width:"100%",overflow:"auto" }}>
 <Frame>
-```mermaid
-graph TB
-    subgraph "User Layer"
-        A[Frontend<br/>Next.js]
-        B[Telegram Bot<br/>Aiogram]
-        C[External APIs<br/>REST/GraphQL]
-    end
-
-    subgraph "Gateway Layer"
-        D[FlowAPI<br/>FastAPI Gateway]
-    end
-
-    subgraph "Processing Layer"
-        E[Engine<br/>Camunda BPMN]
-        F[Workers<br/>Task Processors]
-        G[Warehouse<br/>Analytics]
-        H[MCP<br/>AI Integration]
-    end
-
-    subgraph "Storage Layer"
-        I[PostgreSQL<br/>Transactional]
-        J[Redis<br/>Cache/Sessions]
-        K[ClickHouse<br/>Analytics]
-        L[Elasticsearch<br/>Search/Logs]
-    end
-
-    subgraph "Blockchain Layer"
-        M[Smart Contracts<br/>Solidity]
-        N[Web3 Providers<br/>RPC/WebSocket]
-        O[Multiple Chains<br/>ETH/BSC/Polygon]
-    end
-
-    A --> D
-    B --> D
-    C --> D
-    D --> E
-    D --> F
-    D --> G
-    D --> H
-    E --> I
-    F --> J
-    F --> N
-    G --> K
-    G --> L
-    H --> I
-    N --> M
-    N --> O
-
-    style A fill:#3B82F6
-    style E fill:#10B981
-    style F fill:#F59E0B
-    style I fill:#8B5CF6
-    style M fill:#EF4444
-```
+  ```mermaid
+  graph TB
+      subgraph "User Layer"
+          A[Frontend<br/>Next.js]
+          B[Telegram Bot<br/>Aiogram]
+          C[External APIs<br/>REST/GraphQL]
+      end
+  
+      subgraph "Gateway Layer"
+          D[FlowAPI<br/>FastAPI Gateway]
+      end
+  
+      subgraph "Processing Layer"
+          E[Engine<br/>Camunda BPMN]
+          F[Workers<br/>Task Processors]
+          G[Warehouse<br/>Analytics]
+          H[MCP<br/>AI Integration]
+      end
+  
+      subgraph "Storage Layer"
+          I[PostgreSQL<br/>Transactional]
+          J[Redis<br/>Cache/Sessions]
+          K[ClickHouse<br/>Analytics]
+          L[Elasticsearch<br/>Search/Logs]
+      end
+  
+      subgraph "Blockchain Layer"
+          M[Smart Contracts<br/>Solidity]
+          N[Web3 Providers<br/>RPC/WebSocket]
+          O[Multiple Chains<br/>ETH/BSC/Polygon]
+      end
+  
+      A --> D
+      B --> D
+      C --> D
+      D --> E
+      D --> F
+      D --> G
+      D --> H
+      E --> I
+      F --> J
+      F --> N
+      G --> K
+      G --> L
+      H --> I
+      N --> M
+      N --> O
+  
+      style A fill:#3B82F6
+      style E fill:#10B981
+      style F fill:#F59E0B
+      style I fill:#8B5CF6
+      style M fill:#EF4444
+  ```
 </Frame>
+
 </div>
 
 ## Design Principles
 
 ### 🎯 Separation of Concerns
+
 Each service has a single, well-defined responsibility:
 
 <CardGroup cols={2}>
   <Card title="Engine" icon="gear">
-    **Workflow Orchestration**<br/>
+    **Workflow Orchestration**\
+    
     Manages BPMN workflows and process execution
   </Card>
   <Card title="FlowAPI" icon="gateway">
-    **API Gateway**<br/>
+    **API Gateway**\
+    
     Handles authentication, routing, and coordination
   </Card>
   <Card title="Workers" icon="robot">
-    **Task Processing**<br/>
+    **Task Processing**\
+    
     Executes blockchain operations and AI tasks
   </Card>
   <Card title="Warehouse" icon="database">
-    **Data & Analytics**<br/>
+    **Data & Analytics**\
+    
     Aggregates data and provides analytics capabilities
   </Card>
 </CardGroup>
 
 ### 🔄 Loose Coupling
+
 Services communicate through well-defined interfaces and message queues, ensuring:
 
 - **Independent Deployment**: Update services without affecting others
@@ -102,6 +109,7 @@ Services communicate through well-defined interfaces and message queues, ensurin
 - **Scalability**: Scale components based on actual load
 
 ### 🚀 Horizontal Scalability
+
 Every component can scale independently:
 
 <Tabs>
@@ -120,6 +128,7 @@ Every component can scale independently:
 ## Service Overview
 
 ### 🎮 Frontend (Next.js)
+
 **Purpose**: Modern web interface for workflow management and monitoring
 
 <AccordionGroup>
@@ -129,7 +138,6 @@ Every component can scale independently:
     - **Responsive Design**: Mobile-friendly interface
     - **Type Safety**: Full TypeScript implementation
   </Accordion>
-
   <Accordion title="Technical Stack">
     - **Framework**: Next.js 15 with App Router
     - **UI Library**: React 19 with hooks
@@ -142,6 +150,7 @@ Every component can scale independently:
 **Dependencies**: FlowAPI, WebSocket connections
 
 ### 🚪 FlowAPI (FastAPI)
+
 **Purpose**: Central API gateway and service coordinator
 
 <AccordionGroup>
@@ -151,7 +160,6 @@ Every component can scale independently:
     - **Rate Limiting**: Prevent API abuse and ensure fair usage
     - **Request Routing**: Intelligent routing to backend services
   </Accordion>
-
   <Accordion title="API Capabilities">
     - **REST API**: Comprehensive RESTful endpoints
     - **WebSocket**: Real-time bidirectional communication
@@ -164,6 +172,7 @@ Every component can scale independently:
 **Dependencies**: PostgreSQL, Redis, Engine, Warehouse
 
 ### ⚙️ Engine (Camunda)
+
 **Purpose**: BPMN 2.0 workflow orchestration and process management
 
 <AccordionGroup>
@@ -173,7 +182,6 @@ Every component can scale independently:
     - **Process Versioning**: Safe workflow updates
     - **Instance Management**: Complete lifecycle control
   </Accordion>
-
   <Accordion title="Enterprise Features">
     - **Cockpit UI**: Built-in monitoring dashboard
     - **History Service**: Complete audit trail
@@ -187,6 +195,7 @@ Every component can scale independently:
 **Dependencies**: PostgreSQL
 
 ### 🤖 Workers (Python)
+
 **Purpose**: Distributed task processors for blockchain and AI operations
 
 <Card title="Worker Types" icon="list">
@@ -203,7 +212,6 @@ Every component can scale independently:
     - **Contract Interaction**: ABI encoding/decoding
     - **Event Monitoring**: Real-time blockchain event processing
   </Accordion>
-
   <Accordion title="AI Capabilities">
     - **Model Integration**: TensorFlow, PyTorch model serving
     - **NLP Processing**: Sentiment analysis, text classification
@@ -216,6 +224,7 @@ Every component can scale independently:
 **Dependencies**: Redis, blockchain RPCs, AI model APIs
 
 ### 📊 Warehouse (FastAPI + Analytics)
+
 **Purpose**: Data aggregation, search, and analytics
 
 <AccordionGroup>
@@ -225,7 +234,6 @@ Every component can scale independently:
     - **Social Data**: Social media sentiment and news
     - **Internal Metrics**: System performance and user activity
   </Accordion>
-
   <Accordion title="Analytics Capabilities">
     - **Real-time Processing**: Stream processing with sub-second latency
     - **Historical Analysis**: Years of historical data for backtesting
@@ -239,6 +247,7 @@ Every component can scale independently:
 **Dependencies**: ClickHouse, Elasticsearch, PostgreSQL
 
 ### 💬 Bot (Telegram)
+
 **Purpose**: Conversational interface for quick commands and notifications
 
 <AccordionGroup>
@@ -248,7 +257,6 @@ Every component can scale independently:
     - **Alerts**: Price alerts and system notifications
     - **Quick Actions**: Emergency stops and position management
   </Accordion>
-
   <Accordion title="Notifications">
     - **Trade Execution**: Successful trades and errors
     - **System Events**: Service health and maintenance
@@ -261,6 +269,7 @@ Every component can scale independently:
 **Dependencies**: FlowAPI, Telegram Bot API
 
 ### 🧠 MCP (AI Integration)
+
 **Purpose**: AI model integration and context management
 
 <AccordionGroup>
@@ -270,7 +279,6 @@ Every component can scale independently:
     - **Custom Models**: User-trained models for specific strategies
     - **Model Ensemble**: Combining multiple models for better accuracy
   </Accordion>
-
   <Accordion title="Memory Management">
     - **Short-term Memory**: Context for current conversations
     - **Long-term Memory**: Historical patterns and learnings
@@ -288,11 +296,13 @@ Every component can scale independently:
 
 <CardGroup cols={2}>
   <Card title="REST APIs" icon="exchange">
-    **Use Case**: Direct service-to-service calls<br/>
+    **Use Case**: Direct service-to-service calls\
+    
     **Pattern**: Request-response with immediate feedback
   </Card>
   <Card title="GraphQL" icon="project-diagram">
-    **Use Case**: Flexible data queries from frontend<br/>
+    **Use Case**: Flexible data queries from frontend\
+    
     **Pattern**: Single endpoint with query optimization
   </Card>
 </CardGroup>
@@ -301,15 +311,18 @@ Every component can scale independently:
 
 <CardGroup cols={3}>
   <Card title="Message Queues" icon="list-check">
-    **Technology**: RabbitMQ<br/>
+    **Technology**: RabbitMQ\
+    
     **Use Case**: Decoupled task processing
   </Card>
   <Card title="Event Streaming" icon="broadcast-tower">
-    **Technology**: Redis Pub/Sub<br/>
+    **Technology**: Redis Pub/Sub\
+    
     **Use Case**: Real-time notifications
   </Card>
   <Card title="External Tasks" icon="external-link">
-    **Technology**: Camunda<br/>
+    **Technology**: Camunda\
+    
     **Use Case**: Workflow task distribution
   </Card>
 </CardGroup>
@@ -344,6 +357,7 @@ ws.onmessage = (event) => {
 <Tabs>
   <Tab title="PostgreSQL">
     **Primary Database**
+
     - User accounts and authentication
     - Workflow definitions and instances
     - Configuration and metadata
@@ -351,6 +365,7 @@ ws.onmessage = (event) => {
   </Tab>
   <Tab title="Redis">
     **Cache & Sessions**
+
     - Session storage and authentication tokens
     - Temporary data and computation results
     - Real-time data feeds and pub/sub
@@ -358,6 +373,7 @@ ws.onmessage = (event) => {
   </Tab>
   <Tab title="ClickHouse">
     **Time-Series Analytics**
+
     - Blockchain events and transactions
     - Market data and price feeds
     - Performance metrics and logs
@@ -365,6 +381,7 @@ ws.onmessage = (event) => {
   </Tab>
   <Tab title="Elasticsearch">
     **Search & Logging**
+
     - Full-text search capabilities
     - Log aggregation and analysis
     - Real-time event processing
@@ -374,7 +391,7 @@ ws.onmessage = (event) => {
 
 ### 🔄 Data Flow
 
-<div style={{minHeight: '500px', height: 'auto', margin: '20px 0', width: '100%', overflow: 'auto'}}>
+<div style={{ minHeight:"500px",height:"auto",margin:"20px 0",width:"100%",overflow:"auto" }}>
 ```mermaid
 graph LR
     A[Blockchain Events] --> B[Workers]
@@ -386,6 +403,7 @@ graph LR
     D --> H[API Responses]
     E --> I[Analytics Queries]
 ```
+
 </div>
 
 ## Security Architecture
@@ -441,14 +459,12 @@ graph LR
     - Query optimization and indexing
     - Partitioning for large datasets
   </Accordion>
-
   <Accordion title="Caching Strategy">
     - Multi-level caching (Redis, CDN, browser)
     - Cache invalidation strategies
     - Precomputed results for common queries
     - Cache warming for critical data
   </Accordion>
-
   <Accordion title="API Optimization">
     - Response compression and minification
     - Request batching and multiplexing
